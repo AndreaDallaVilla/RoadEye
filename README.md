@@ -17,3 +17,5 @@
 
 - [requirements, use cases, bpmn, actors, swot analysis and mockup](https://github.com/user-attachments/files/26598473/first_deliverable_group_16.pdf)
 
+- [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
+
