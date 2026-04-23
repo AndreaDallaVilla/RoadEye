@@ -1,0 +1,26 @@
+{
+  "name": "roadeye-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend setup for the RoadEye web application.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "docs": "jsdoc -c jsdoc.json",
+    "init:db": "node src/scripts/initDb.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5",
+    "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "jsdoc": "^4.0.5"
+  }
+}
