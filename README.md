@@ -19,3 +19,4 @@
 
 - [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
 
+
