@@ -14,5 +14,5 @@
 
 - [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
 
-##Terminal commands:
+## Terminal commands:
 - Authentication: **npm run test:auth-api:auto**
