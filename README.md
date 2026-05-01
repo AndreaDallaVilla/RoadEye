@@ -14,10 +14,10 @@
 
 - [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
 
-<<<<<<< HEAD
+
 ## Terminal commands:
 - Authentication: **npm run test:auth-api:auto**
-=======
+
 ## Google Maps API
 
 Add a Google Maps Platform key to `.env`:
@@ -37,4 +37,3 @@ The backend exposes public endpoints for the RoadEye map workflow:
 Use the returned coordinates to save report locations, and use `embedUrl` as the `src` of a frontend iframe.
 
 
->>>>>>> 0790139 (add API Google Maps)
