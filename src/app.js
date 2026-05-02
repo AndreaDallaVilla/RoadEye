@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const path = require("path");
 
 const apiRouter = require("./routes");
 const notFound = require("./middlewares/notFound");
@@ -15,6 +16,7 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
+app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", service: "roadeye-api" });

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RoadEye</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/@googlemaps/extended-component-library/0.6.11/index.min.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <div class="phone-app">
+      <header class="app-header">
+        <button class="icon-button" id="menu-toggle" type="button" aria-label="Apri menu">☰</button>
+        <div>
+          <p>Segnalazioni</p>
+          <h1>Problematiche stradali</h1>
+        </div>
+        <button class="icon-button" data-open-auth="login" type="button" aria-label="Accedi">↪</button>
+      </header>
+
+      <aside class="drawer" id="drawer" aria-label="Menu applicazione">
+        <div class="drawer-head">
+          <strong id="drawer-user">Ciao, visitatore</strong>
+          <button class="icon-button" id="menu-close" type="button" aria-label="Chiudi menu">×</button>
+        </div>
+        <nav>
+          <button type="button" data-view="home">Home</button>
+          <button type="button" data-view="report">Nuova segnalazione</button>
+          <button type="button" data-open-auth="login">Accedi</button>
+          <button type="button" data-open-auth="register">Registrati</button>
+          <button type="button" id="logout-button" hidden>Esci</button>
+        </nav>
+      </aside>
+
+      <main>
+        <section class="screen active" id="home-screen">
+          <div class="search-row">
+            <div class="map-search-host">
+              <gmpx-place-picker placeholder="Cerca in Provincia di Trento"></gmpx-place-picker>
+            </div>
+            <button class="icon-button" id="home-menu-button" type="button" aria-label="Menu">☰</button>
+          </div>
+
+          <div class="chip-row" aria-label="Filtri segnalazioni">
+            <button type="button">Trentino</button>
+            <button type="button">Tutte</button>
+            <button type="button">Buche</button>
+            <button type="button">Semafori</button>
+            <button type="button">Cantieri</button>
+          </div>
+
+          <div class="map-box">
+            <gmp-map id="roadeye-map">
+              <gmp-advanced-marker></gmp-advanced-marker>
+            </gmp-map>
+            <div class="map-status" id="maps-status">Caricamento mappa</div>
+          </div>
+
+          <section class="news-box">
+            <h2>Ultime notizie vicine a te</h2>
+            <ul>
+              <li><span>!</span><strong>Incidente tra autoveicoli - Trento</strong></li>
+              <li><span>!</span><strong>Cantiere stradale - Rovereto</strong></li>
+              <li><span>!</span><strong>Percorso con pericolo - Pergine</strong></li>
+            </ul>
+          </section>
+        </section>
+
+        <section class="screen" id="report-screen">
+          <div class="screen-head">
+            <button class="link-button" type="button" data-view="home">← Mappa</button>
+            <button class="icon-button" type="button" data-view="home" aria-label="Chiudi">×</button>
+          </div>
+
+          <h2>Aggiungi segnalazione</h2>
+          <div class="category-grid">
+            <button type="button" data-category="Incidente tra autoveicoli">Incidente tra autoveicoli <span>🚗</span></button>
+            <button type="button" data-category="Cantiere stradale">Cantiere stradale <span>🚧</span></button>
+            <button type="button" data-category="Evento">Evento <span>🎙</span></button>
+            <button type="button" data-category="Ferimento animale">Ferimento animale <span>⚠</span></button>
+            <button type="button" data-category="Percorso bordo strada">Percorso bordo strada <span>△</span></button>
+          </div>
+
+          <form class="wire-form" id="report-form">
+            <label>
+              Posizione
+              <input id="report-position" name="posizione" type="text" readonly value="Seleziona un luogo dalla mappa">
+            </label>
+            <label>
+              Categoria
+              <input id="report-category" name="categoria" type="text" readonly>
+            </label>
+            <label>
+              Descrizione
+              <textarea name="descrizione" rows="4" placeholder="Descrivi il problema"></textarea>
+            </label>
+            <label>
+              Gravita'
+              <input name="gravita" type="range" min="1" max="5" value="3">
+            </label>
+            <div class="button-row">
+              <button class="outline-button" type="button" data-view="home">Annulla</button>
+              <button class="solid-button" type="submit">Invia segnalazione</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="screen auth-screen" id="auth-screen">
+          <div class="screen-head">
+            <button class="link-button" type="button" data-view="home">← Home</button>
+          </div>
+
+          <div class="auth-tabs">
+            <button class="active" id="login-tab" type="button" data-auth-panel="login">Accedi</button>
+            <button id="register-tab" type="button" data-auth-panel="register">Registrati</button>
+          </div>
+
+          <form class="wire-form auth-panel active" id="login-form">
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required>
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="current-password" required>
+            </label>
+            <button class="solid-button full" type="submit">Accedi</button>
+          </form>
+
+          <form class="wire-form auth-panel" id="register-form">
+            <label>
+              Tipo account
+              <select name="tipoUtente" id="account-type">
+                <option value="Utente Registrato">Utente registrato</option>
+                <option value="Ente Pubblico">Ente pubblico</option>
+              </select>
+            </label>
+
+            <div class="registered-fields">
+              <label>Nome <input name="nome" type="text" data-registered-required required></label>
+              <label>Cognome <input name="cognome" type="text"></label>
+              <label>Nome pubblico <input name="nomeUtentePubblico" type="text" data-registered-required required></label>
+              <label>Data di nascita <input name="dataNascita" type="date" data-registered-required required></label>
+              <label>
+                Sesso
+                <select name="sesso">
+                  <option value="">Seleziona</option>
+                  <option value="Femmina">Femmina</option>
+                  <option value="Maschio">Maschio</option>
+                </select>
+              </label>
+              <label>Numero di telefono <input name="numeroTelefono" type="tel"></label>
+            </div>
+
+            <div class="entity-fields" hidden>
+              <label>Denominazione <input name="denominazione" type="text" data-entity-required></label>
+              <label>PEC <input name="pec" type="email" data-entity-required></label>
+              <label>Codice IPA <input name="codiceIpa" type="text" data-entity-required></label>
+              <label>Codice univoco <input name="codiceUnivoco" type="text" data-entity-required></label>
+            </div>
+
+            <label>
+              Codice fiscale
+              <input name="codiceFiscale" type="text" required>
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required>
+            </label>
+            <label>
+              Password
+              <input name="password" type="password" autocomplete="new-password" required>
+            </label>
+            <label class="check-row">
+              <input name="notificheAttive" type="checkbox" checked>
+              Notifiche attive
+            </label>
+            <button class="solid-button full" type="submit">Salva</button>
+          </form>
+
+          <p class="form-message" id="auth-message" role="status"></p>
+        </section>
+      </main>
+
+      <nav class="bottom-actions">
+        <button type="button" data-view="home">Mappa</button>
+        <button class="primary-action" type="button" data-view="report">+</button>
+        <button type="button" data-open-auth="login">Accedi</button>
+      </nav>
+    </div>
+  </body>
+</html>

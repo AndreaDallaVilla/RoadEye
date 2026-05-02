@@ -4,6 +4,13 @@ const GEOCODING_BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 const EMBED_BASE_URL = "https://www.google.com/maps/embed/v1";
 const DEFAULT_LANGUAGE = process.env.GOOGLE_MAPS_LANGUAGE || "it";
 const DEFAULT_REGION = process.env.GOOGLE_MAPS_REGION || "it";
+const DEFAULT_MAP_ID = process.env.GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
+const TRENTINO_BOUNDS = Object.freeze({
+  north: 46.62,
+  south: 45.65,
+  east: 11.98,
+  west: 10.45,
+});
 
 function getGoogleMapsApiKey() {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
@@ -161,7 +168,24 @@ function creaEmbedUrl(payload) {
   );
 }
 
+function creaConfigurazioneClient() {
+  return {
+    apiKey: getGoogleMapsApiKey(),
+    language: DEFAULT_LANGUAGE,
+    region: DEFAULT_REGION,
+    mapId: DEFAULT_MAP_ID,
+    center: {
+      latitudine: 46.0667,
+      longitudine: 11.1211,
+    },
+    zoom: 10,
+    bounds: TRENTINO_BOUNDS,
+    areaLabel: "Provincia autonoma di Trento",
+  };
+}
+
 module.exports = {
+  creaConfigurazioneClient,
   creaEmbedUrl,
   geocodificaIndirizzo,
   geocodificaInversa,

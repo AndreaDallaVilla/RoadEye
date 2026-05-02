@@ -27,8 +27,18 @@ function getEmbedUrl(req, res, next) {
   }
 }
 
+function getClientConfig(_req, res, next) {
+  try {
+    const result = mapsService.creaConfigurazioneClient();
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   geocode,
+  getClientConfig,
   getEmbedUrl,
   reverseGeocode,
 };
