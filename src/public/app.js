@@ -11,6 +11,18 @@
   const authMessage = document.querySelector("#auth-message");
   const reportPosition = document.querySelector("#report-position");
   const reportCategory = document.querySelector("#report-category");
+  const headerSectionTitle = document.querySelector("#header-section-title");
+
+  const viewTitles = {
+    home: "Home",
+    report: "Nuova segnalazione",
+    auth: "Accedi",
+  };
+
+  const authTitles = {
+    login: "Accedi",
+    register: "Registrati",
+  };
 
   let selectedPlace = null;
   let allowedBounds = null;
@@ -83,6 +95,7 @@
     });
 
     document.querySelector(`#${viewName}-screen`).classList.add("active");
+    headerSectionTitle.textContent = viewTitles[viewName] || "Home";
     drawer.classList.remove("open");
   }
 
@@ -99,6 +112,27 @@
 
     document.querySelector(`#${panelName}-form`).classList.add("active");
     document.querySelector(`#${panelName}-tab`).classList.add("active");
+    headerSectionTitle.textContent = authTitles[panelName] || viewTitles.auth;
+  }
+
+  function initPasswordToggles() {
+    document.querySelectorAll(".password-toggle").forEach((button) => {
+      const field = button.closest(".password-field");
+      const input = field ? field.querySelector("input") : null;
+
+      if (!input) {
+        return;
+      }
+
+      button.addEventListener("click", () => {
+        const shouldShowPassword = input.type === "password";
+
+        input.type = shouldShowPassword ? "text" : "password";
+        button.setAttribute("aria-pressed", String(shouldShowPassword));
+        button.setAttribute("aria-label", shouldShowPassword ? "Nascondi password" : "Mostra password");
+        input.focus();
+      });
+    });
   }
 
   async function requestJson(url, options) {
@@ -338,6 +372,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
     bindForms();
+    initPasswordToggles();
     refreshCurrentUser();
     initMap();
   });

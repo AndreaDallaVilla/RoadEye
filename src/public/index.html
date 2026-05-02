@@ -12,9 +12,12 @@
     <div class="phone-app">
       <header class="app-header">
         <button class="icon-button" id="menu-toggle" type="button" aria-label="Apri menu">☰</button>
-        <div>
-          <p>Segnalazioni</p>
-          <h1>Problematiche stradali</h1>
+        <div class="brand-lockup">
+          <img class="brand-logo" src="/assets/roadeye-logo.png" alt="" aria-hidden="true">
+          <div>
+            <p id="header-section-title">Home</p>
+            <h1>RoadEye</h1>
+          </div>
         </div>
         <button class="icon-button" data-open-auth="login" type="button" aria-label="Accedi">↪</button>
       </header>
@@ -45,9 +48,12 @@
           <div class="chip-row" aria-label="Filtri segnalazioni">
             <button type="button">Trentino</button>
             <button type="button">Tutte</button>
-            <button type="button">Buche</button>
-            <button type="button">Semafori</button>
+            <button type="button">Incidenti</button>
+            <button type="button">Autovelox</button>
+            <button type="button">Pericolo bordo strada</button>
+            <button type="button">Eventi</button>
             <button type="button">Cantieri</button>
+            <button type="button">Ferimento animali</button>
           </div>
 
           <div class="map-box">
@@ -123,7 +129,15 @@
             </label>
             <label>
               Password
-              <input name="password" type="password" autocomplete="current-password" required>
+              <span class="password-field">
+                <input name="password" type="password" autocomplete="current-password" required>
+                <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </span>
             </label>
             <button class="solid-button full" type="submit">Accedi</button>
           </form>
@@ -170,7 +184,15 @@
             </label>
             <label>
               Password
-              <input name="password" type="password" autocomplete="new-password" required>
+              <span class="password-field">
+                <input name="password" type="password" autocomplete="new-password" required>
+                <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </span>
             </label>
             <label class="check-row">
               <input name="notificheAttive" type="checkbox" checked>
