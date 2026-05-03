@@ -7,7 +7,7 @@
   const status = document.querySelector("#maps-status");
   const drawer = document.querySelector("#drawer");
   const drawerUser = document.querySelector("#drawer-user");
-  const logoutButton = document.querySelector("#logout-button");
+  const headerAuthButton = document.querySelector("#header-auth-button");
   const authMessage = document.querySelector("#auth-message");
   const reportPosition = document.querySelector("#report-position");
   const reportCategory = document.querySelector("#report-category");
@@ -26,6 +26,7 @@
 
   let selectedPlace = null;
   let allowedBounds = null;
+  let currentView = "home";
 
   function setStatus(message, state) {
     status.textContent = message;
@@ -90,11 +91,17 @@
   }
 
   function showView(viewName) {
+    if (viewName === currentView) {
+      drawer.classList.remove("open");
+      return;
+    }
+
     document.querySelectorAll(".screen").forEach((screen) => {
       screen.classList.remove("active");
     });
 
     document.querySelector(`#${viewName}-screen`).classList.add("active");
+    currentView = viewName;
     headerSectionTitle.textContent = viewTitles[viewName] || "Home";
     drawer.classList.remove("open");
   }
@@ -174,13 +181,17 @@
   function updateAuthState(user) {
     if (!user) {
       drawerUser.textContent = "Ciao, visitatore";
-      logoutButton.hidden = true;
+      headerAuthButton.textContent = "Accedi";
+      headerAuthButton.classList.remove("is-logged-in");
+      headerAuthButton.setAttribute("aria-label", "Accedi");
       return;
     }
 
     const profile = user.profilo || {};
     drawerUser.textContent = `Ciao, ${profile.nomeUtentePubblico || profile.nome || profile.denominazione || user.email}`;
-    logoutButton.hidden = false;
+    headerAuthButton.textContent = "Esci";
+    headerAuthButton.classList.add("is-logged-in");
+    headerAuthButton.setAttribute("aria-label", "Esci");
   }
 
   async function refreshCurrentUser() {
@@ -200,8 +211,15 @@
 
   function bindNavigation() {
     document.querySelector("#menu-toggle").addEventListener("click", () => drawer.classList.add("open"));
-    document.querySelector("#home-menu-button").addEventListener("click", () => drawer.classList.add("open"));
     document.querySelector("#menu-close").addEventListener("click", () => drawer.classList.remove("open"));
+    headerAuthButton.addEventListener("click", () => {
+      if (getToken()) {
+        logout();
+        return;
+      }
+
+      showAuth("login");
+    });
 
     document.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => showView(button.dataset.view));
@@ -214,6 +232,19 @@
     document.querySelectorAll("[data-auth-panel]").forEach((button) => {
       button.addEventListener("click", () => showAuth(button.dataset.authPanel));
     });
+  }
+
+  async function logout() {
+    try {
+      await requestJson("/api/auth/logout", { method: "POST" });
+    } catch (_error) {
+      // Anche se il token e' gia' scaduto, lato client va comunque rimosso.
+    }
+
+    setToken(null);
+    updateAuthState(null);
+    drawer.classList.remove("open");
+    showView("home");
   }
 
   function bindForms() {
@@ -279,18 +310,6 @@
       } catch (error) {
         setAuthMessage(error.message, "error");
       }
-    });
-
-    logoutButton.addEventListener("click", async () => {
-      try {
-        await requestJson("/api/auth/logout", { method: "POST" });
-      } catch (_error) {
-        // Anche se il token e' gia' scaduto, lato client va comunque rimosso.
-      }
-
-      setToken(null);
-      updateAuthState(null);
-      drawer.classList.remove("open");
     });
   }
 

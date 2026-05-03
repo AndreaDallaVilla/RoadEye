@@ -19,7 +19,7 @@
             <h1>RoadEye</h1>
           </div>
         </div>
-        <button class="icon-button" data-open-auth="login" type="button" aria-label="Accedi">↪</button>
+        <button class="auth-action-button" id="header-auth-button" type="button">Accedi</button>
       </header>
 
       <aside class="drawer" id="drawer" aria-label="Menu applicazione">
@@ -30,9 +30,6 @@
         <nav>
           <button type="button" data-view="home">Home</button>
           <button type="button" data-view="report">Nuova segnalazione</button>
-          <button type="button" data-open-auth="login">Accedi</button>
-          <button type="button" data-open-auth="register">Registrati</button>
-          <button type="button" id="logout-button" hidden>Esci</button>
         </nav>
       </aside>
 
@@ -42,7 +39,6 @@
             <div class="map-search-host">
               <gmpx-place-picker placeholder="Cerca in Provincia di Trento"></gmpx-place-picker>
             </div>
-            <button class="icon-button" id="home-menu-button" type="button" aria-label="Menu">☰</button>
           </div>
 
           <div class="chip-row" aria-label="Filtri segnalazioni">
@@ -75,7 +71,7 @@
 
         <section class="screen" id="report-screen">
           <div class="screen-head">
-            <button class="link-button" type="button" data-view="home">← Mappa</button>
+            <button class="link-button" type="button" data-view="home">Mappa</button>
             <button class="icon-button" type="button" data-view="home" aria-label="Chiudi">×</button>
           </div>
 
@@ -113,10 +109,6 @@
         </section>
 
         <section class="screen auth-screen" id="auth-screen">
-          <div class="screen-head">
-            <button class="link-button" type="button" data-view="home">← Home</button>
-          </div>
-
           <div class="auth-tabs">
             <button class="active" id="login-tab" type="button" data-auth-panel="login">Accedi</button>
             <button id="register-tab" type="button" data-auth-panel="register">Registrati</button>
@@ -206,9 +198,8 @@
       </main>
 
       <nav class="bottom-actions">
-        <button type="button" data-view="home">Mappa</button>
+        <button type="button" data-view="home">HOME</button>
         <button class="primary-action" type="button" data-view="report">+</button>
-        <button type="button" data-open-auth="login">Accedi</button>
       </nav>
     </div>
   </body>
