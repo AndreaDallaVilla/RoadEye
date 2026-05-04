@@ -48,7 +48,7 @@ async function authenticate(req, _res, next) {
       throw createHttpError(401, "Token di autenticazione non valido o scaduto");
     }
 
-    // Aggiorna l'ultima attivita della sessione per future logiche di audit o pulizia.
+    // Aggiorna l'ultima attività della sessione per future logiche di audit o pulizia.
     sessioneCorrente.ultimoUtilizzoIl = adesso;
     await utente.save();
 
