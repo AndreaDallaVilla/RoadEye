@@ -7,7 +7,7 @@ info:
     name: Proprietary
 
 servers:
-  - url: http://localhost:3000
+  - url: http://localhost:3001
     description: Server locale di sviluppo
 
 tags:
@@ -46,9 +46,7 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: "#/components/schemas/RegisterUtenteRequest"
-                - $ref: "#/components/schemas/RegisterEntePubblicoRequest"
+              $ref: "#/components/schemas/RegisterUtenteRequest"
             examples:
               utenteRegistrato:
                 summary: Utente registrato
@@ -63,19 +61,6 @@ paths:
                   dataNascita: "1990-01-01"
                   sesso: Maschio
                   numeroTelefono: "+393331234567"
-                  localizzazioneAttiva: true
-                  notificheAttive: true
-              entePubblico:
-                summary: Ente pubblico
-                value:
-                  tipoUtente: Ente Pubblico
-                  email: comune@example.it
-                  codiceFiscale: "00355870221"
-                  password: Password123!
-                  denominazione: Comune
-                  pec: comune@pec.example.it
-                  codiceIpa: C_1378
-                  codiceUnivoco: KE9B1B
                   localizzazioneAttiva: true
                   notificheAttive: true
       responses:
@@ -112,9 +97,10 @@ paths:
                   email: mario.rossi@example.com
                   password: Password123!
               entePubblico:
-                summary: Login ente pubblico con codici istituzionali
+                summary: Login ente pubblico selezionato dal database
                 value:
-                  codiceFiscale: "00355870221"
+                  publicEntityId: 662f9d2a9a59c651d629f121
+                  pec: comune@pec.example.it
                   codiceIpa: C_1378
                   codiceUnivoco: KE9B1B
                   password: Password123!
@@ -131,6 +117,23 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/public-entities:
+    get:
+      tags:
+        - Auth
+      summary: Elenca gli enti pubblici disponibili per il login
+      operationId: listPublicEntities
+      security: []
+      responses:
+        "200":
+          description: Enti pubblici disponibili
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicEntityListResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -416,7 +419,7 @@ components:
         - codiceFiscale
         - password
         - nome
-        - nomeUtentePubblico
+        - cognome
         - dataNascita
       properties:
         tipoUtente:
@@ -459,76 +462,63 @@ components:
           type: boolean
           default: false
 
-    RegisterEntePubblicoRequest:
-      type: object
-      required:
-        - tipoUtente
-        - email
-        - codiceFiscale
-        - password
-        - denominazione
-        - pec
-        - codiceIpa
-        - codiceUnivoco
-      properties:
-        tipoUtente:
-          type: string
-          enum:
-            - Ente Pubblico
-        email:
-          type: string
-          format: email
-        codiceFiscale:
-          type: string
-          minLength: 11
-          maxLength: 16
-        password:
-          type: string
-          format: password
-        denominazione:
-          type: string
-        pec:
-          type: string
-          format: email
-        codiceIpa:
-          type: string
-          minLength: 4
-          maxLength: 10
-          pattern: "^[A-Z0-9_]{4,10}$"
-        codiceUnivoco:
-          type: string
-          minLength: 4
-          maxLength: 10
-          pattern: "^[A-Z0-9]{4,10}$"
-        localizzazioneAttiva:
-          type: boolean
-          default: false
-        notificheAttive:
-          type: boolean
-          default: false
-
     LoginRequest:
       type: object
       required:
         - password
       properties:
+        publicEntityId:
+          type: string
+          description: Identificativo dell'ente selezionato da /api/auth/public-entities.
         email:
           type: string
           format: email
           description: Richiesta per il login classico con email e password.
+        pec:
+          type: string
+          format: email
+          description: Richiesta per il login ente pubblico con publicEntityId.
         codiceFiscale:
           type: string
-          description: Richiesto insieme a codiceIpa e codiceUnivoco per il login di un ente pubblico senza email.
+          description: Compatibilita con il login ente pubblico senza selezione da lista.
         codiceIpa:
           type: string
+          description: Richiesto per il login ente pubblico.
         codiceUnivoco:
           type: string
+          description: Richiesto solo se l'ente selezionato lo prevede nel database.
         password:
           type: string
           format: password
         codiceMfa:
           type: string
           description: Codice MFA richiesto solo se l'utente ha MFA attiva.
+
+    PublicEntityListResponse:
+      type: object
+      required:
+        - enti
+      properties:
+        enti:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicEntityOption"
+
+    PublicEntityOption:
+      type: object
+      required:
+        - id
+        - denominazione
+        - richiedeCodiceUnivoco
+      properties:
+        id:
+          type: string
+          example: 662f9d2a9a59c651d629f121
+        denominazione:
+          type: string
+          example: Comune
+        richiedeCodiceUnivoco:
+          type: boolean
 
     AuthResponse:
       type: object

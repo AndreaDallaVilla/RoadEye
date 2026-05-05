@@ -36,8 +36,18 @@ async function logout(req, res, next) {
   }
 }
 
+async function listPublicEntities(_req, res, next) {
+  try {
+    const enti = await authService.listPublicEntities();
+    res.status(200).json({ enti });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getCurrentUser,
+  listPublicEntities,
   login,
   logout,
   register,

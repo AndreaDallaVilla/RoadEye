@@ -103,6 +103,7 @@ button {
 .category-grid button,
 .drawer nav button,
 .auth-tabs button,
+.login-mode-tabs button,
 .bottom-actions button {
   border: 2px solid var(--line);
   border-radius: 0;
@@ -149,6 +150,8 @@ main {
 }
 
 .search-row {
+  position: relative;
+  z-index: 2;
   display: block;
 }
 
@@ -175,21 +178,30 @@ gmpx-place-picker {
 }
 
 .map-box {
+  isolation: isolate;
   position: relative;
+  z-index: 1;
   height: clamp(250px, 48vh, 420px);
   border: 2px solid var(--line);
   background: var(--soft);
+  caret-color: transparent;
   overflow: hidden;
+  user-select: none;
 }
 
 gmp-map {
+  position: relative;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
+  caret-color: transparent;
+  user-select: none;
 }
 
 .map-status {
   position: absolute;
+  z-index: 2;
   top: 8px;
   right: 8px;
   max-width: 70%;
@@ -212,7 +224,8 @@ gmp-map {
 .news-box,
 .wire-form,
 .category-grid,
-.auth-tabs {
+.auth-tabs,
+.login-mode-tabs {
   margin-top: 12px;
 }
 
@@ -394,6 +407,84 @@ gmp-map {
   transform: rotate(-38deg);
 }
 
+.password-strength {
+  --strength-color: var(--muted);
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--strength-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.strength-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.strength-icon::before {
+  content: "";
+}
+
+.strength-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  min-width: 0;
+}
+
+.strength-meter span {
+  height: 6px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.password-strength.is-weak {
+  --strength-color: var(--accent);
+}
+
+.password-strength.is-weak .strength-icon::before {
+  content: "🤢";
+}
+
+.password-strength.is-fair {
+  --strength-color: #b06000;
+}
+
+.password-strength.is-fair .strength-icon::before {
+  content: "🥺";
+}
+
+.password-strength.is-good {
+  --strength-color: var(--focus);
+}
+
+.password-strength.is-good .strength-icon::before {
+  content: "😎";
+}
+
+.password-strength.is-strong {
+  --strength-color: var(--ok);
+}
+
+.password-strength.is-strong .strength-icon::before {
+  content: "🤪";
+}
+
+.password-strength.is-weak .strength-meter span:nth-child(-n + 1),
+.password-strength.is-fair .strength-meter span:nth-child(-n + 2),
+.password-strength.is-good .strength-meter span:nth-child(-n + 3),
+.password-strength.is-strong .strength-meter span {
+  background: currentColor;
+}
+
 .wire-form textarea {
   resize: vertical;
 }
@@ -431,12 +522,20 @@ gmp-map {
   gap: 8px;
 }
 
-.auth-tabs button {
+.login-mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-tabs button,
+.login-mode-tabs button {
   min-height: 42px;
   text-transform: uppercase;
 }
 
-.auth-tabs button.active {
+.auth-tabs button.active,
+.login-mode-tabs button.active {
   background: var(--ink);
   color: var(--paper);
 }
@@ -446,6 +545,14 @@ gmp-map {
 }
 
 .auth-panel.active {
+  display: grid;
+}
+
+.login-mode-panel {
+  display: none;
+}
+
+.login-mode-panel.active {
   display: grid;
 }
 

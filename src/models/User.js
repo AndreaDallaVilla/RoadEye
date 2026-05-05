@@ -210,12 +210,11 @@ schemaUtente.pre("validate", function validaUtente(next) {
       this.invalidate("profilo.nome", "Il nome è obbligatorio");
     }
 
-    if (!this.profilo?.nomeUtentePubblico) {
-      this.invalidate(
-        "profilo.nomeUtentePubblico",
-        "Il nome utente pubblico è obbligatorio per gli utenti registrati",
-      );
-    } else if (!REGEX_NOME_UTENTE_PUBBLICO.test(this.profilo.nomeUtentePubblico)) {
+    if (!this.profilo?.cognome) {
+      this.invalidate("profilo.cognome", "Il cognome e obbligatorio");
+    }
+
+    if (this.profilo?.nomeUtentePubblico && !REGEX_NOME_UTENTE_PUBBLICO.test(this.profilo.nomeUtentePubblico)) {
       this.invalidate(
         "profilo.nomeUtentePubblico",
         "Il nome utente pubblico deve contenere da 3 a 30 caratteri e usare solo lettere, numeri, '.', '_' o '-'",
@@ -268,12 +267,7 @@ schemaUtente.pre("validate", function validaUtente(next) {
       this.invalidate("profilo.codiceIpa", "Formato del codice IPA non valido");
     }
 
-    if (!this.profilo?.codiceUnivoco) {
-      this.invalidate(
-        "profilo.codiceUnivoco",
-        "Il codice univoco è obbligatorio per gli enti pubblici",
-      );
-    } else if (!REGEX_CODICE_UNIVOCO.test(this.profilo.codiceUnivoco)) {
+    if (this.profilo?.codiceUnivoco && !REGEX_CODICE_UNIVOCO.test(this.profilo.codiceUnivoco)) {
       this.invalidate(
         "profilo.codiceUnivoco",
         "Formato del codice univoco non valido",

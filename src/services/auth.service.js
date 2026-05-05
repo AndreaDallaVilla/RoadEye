@@ -33,6 +33,10 @@ function getCodiciEnteDaPayload(payload) {
   };
 }
 
+function normalizzaValoreTesto(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function validaCodiceMfa(codiceMfa) {
   const codiceAtteso = process.env.AUTH_MFA_TEST_CODE || "000000";
   return typeof codiceMfa === "string" && codiceMfa.trim() === codiceAtteso;
@@ -50,6 +54,33 @@ async function trovaUtentePerEmail(email) {
 async function trovaUtentePerLogin(payload) {
   const email = normalizzaEmail(payload.email);
   const codiciEnte = getCodiciEnteDaPayload(payload);
+
+  if (payload.publicEntityId) {
+    const ente = await PublicEntity.findById(payload.publicEntityId).select("+hashPassword +sessioni");
+
+    if (!ente) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    const pec = normalizzaEmail(payload.pec);
+    const codiceIpa = normalizzaCodiceIpa(payload.codiceIpa);
+    const codiceUnivoco = normalizzaCodiceUnivoco(payload.codiceUnivoco);
+    const codiceUnivocoAtteso = normalizzaCodiceUnivoco(ente.profilo?.codiceUnivoco);
+
+    if (!pec || pec !== normalizzaEmail(ente.profilo?.pec)) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    if (!codiceIpa || codiceIpa !== normalizzaCodiceIpa(ente.profilo?.codiceIpa)) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    if (codiceUnivocoAtteso && codiceUnivoco !== codiceUnivocoAtteso) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    return ente;
+  }
 
   if (email) {
     return trovaUtentePerEmail(email);
@@ -299,8 +330,21 @@ function getCurrentUser(utente) {
   return sanitizzaUtente(utente);
 }
 
+async function listPublicEntities() {
+  const enti = await PublicEntity.find({ tipoUtente: TIPI_UTENTE.ENTE_PUBBLICO })
+    .sort({ "profilo.denominazione": 1 })
+    .select("profilo.denominazione profilo.codiceUnivoco");
+
+  return enti.map((ente) => ({
+    id: ente._id,
+    denominazione: normalizzaValoreTesto(ente.profilo?.denominazione),
+    richiedeCodiceUnivoco: Boolean(normalizzaValoreTesto(ente.profilo?.codiceUnivoco)),
+  }));
+}
+
 module.exports = {
   getCurrentUser,
+  listPublicEntities,
   loginUser,
   logoutUser,
   registerUser,

@@ -27,6 +27,7 @@
   let selectedPlace = null;
   let allowedBounds = null;
   let currentView = "home";
+  let publicEntities = [];
 
   function setStatus(message, state) {
     status.textContent = message;
@@ -142,6 +143,74 @@
     });
   }
 
+  function getPasswordStrength(password) {
+    const checks = [
+      password.length >= 10,
+      /[0-9]/.test(password),
+      /[A-Z]/.test(password),
+      /[a-z]/.test(password),
+      /[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password),
+    ];
+    const score = checks.filter(Boolean).length;
+
+    if (!password) {
+      return {
+        isValid: false,
+        state: "",
+        label: "Inserisci una password",
+      };
+    }
+
+    if (score <= 2) {
+      return {
+        isValid: false,
+        state: "is-weak",
+        label: "Password debole",
+      };
+    }
+
+    if (score <= 4) {
+      return {
+        isValid: false,
+        state: score === 3 ? "is-fair" : "is-good",
+        label: score === 3 ? "Password media" : "Quasi forte",
+      };
+    }
+
+    return {
+      isValid: true,
+      state: "is-strong",
+      label: "Password forte",
+    };
+  }
+
+  function updatePasswordStrength(input, indicator) {
+    const strength = getPasswordStrength(input.value);
+    const text = indicator.querySelector(".strength-text");
+
+    indicator.classList.remove("is-weak", "is-fair", "is-good", "is-strong");
+
+    if (strength.state) {
+      indicator.classList.add(strength.state);
+    }
+
+    text.textContent = strength.label;
+    return strength;
+  }
+
+  function initPasswordStrengthIndicator() {
+    const registerForm = document.querySelector("#register-form");
+    const passwordInput = registerForm.querySelector('input[name="password"]');
+    const indicator = registerForm.querySelector("[data-password-strength]");
+
+    if (!passwordInput || !indicator) {
+      return;
+    }
+
+    updatePasswordStrength(passwordInput, indicator);
+    passwordInput.addEventListener("input", () => updatePasswordStrength(passwordInput, indicator));
+  }
+
   async function requestJson(url, options) {
     const response = await fetch(url, {
       headers: {
@@ -188,7 +257,8 @@
     }
 
     const profile = user.profilo || {};
-    drawerUser.textContent = `Ciao, ${profile.nomeUtentePubblico || profile.nome || profile.denominazione || user.email}`;
+    const fullName = [profile.nome, profile.cognome].filter(Boolean).join(" ");
+    drawerUser.textContent = `Ciao, ${profile.nomeUtentePubblico || fullName || profile.denominazione || user.email}`;
     headerAuthButton.textContent = "Esci";
     headerAuthButton.classList.add("is-logged-in");
     headerAuthButton.setAttribute("aria-label", "Esci");
@@ -206,6 +276,89 @@
     } catch (_error) {
       setToken(null);
       updateAuthState(null);
+    }
+  }
+
+  function updatePublicEntityUniqueCodeRequirement() {
+    const select = document.querySelector("#public-entity-select");
+    const row = document.querySelector("#entity-unique-code-row");
+    const input = row ? row.querySelector("input") : null;
+    const selectedEntity = publicEntities.find((entity) => entity.id === select.value);
+    const isRequired = Boolean(selectedEntity?.richiedeCodiceUnivoco);
+
+    if (!input || !row) {
+      return;
+    }
+
+    input.required = isRequired;
+    row.hidden = !selectedEntity || !isRequired;
+
+    if (!isRequired) {
+      input.value = "";
+    }
+  }
+
+  async function loadPublicEntities() {
+    const select = document.querySelector("#public-entity-select");
+
+    if (!select) {
+      return;
+    }
+
+    try {
+      const payload = await requestJson("/api/auth/public-entities");
+      publicEntities = payload.enti || [];
+
+      select.innerHTML = "";
+
+      if (publicEntities.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Nessun ente disponibile";
+        select.append(option);
+        select.disabled = true;
+        updatePublicEntityUniqueCodeRequirement();
+        return;
+      }
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Seleziona ente";
+      select.append(placeholder);
+
+      publicEntities.forEach((entity) => {
+        const option = document.createElement("option");
+        option.value = entity.id;
+        option.textContent = entity.denominazione || "Ente senza denominazione";
+        select.append(option);
+      });
+
+      select.disabled = false;
+      updatePublicEntityUniqueCodeRequirement();
+    } catch (error) {
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Enti non disponibili";
+      select.append(option);
+      select.disabled = true;
+      setAuthMessage(error.message, "error");
+    }
+  }
+
+  function showLoginMode(mode) {
+    document.querySelectorAll("[data-login-mode]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.loginMode === mode);
+    });
+
+    document.querySelectorAll("[data-login-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.loginPanel === mode);
+    });
+
+    setAuthMessage("");
+
+    if (mode === "entity") {
+      loadPublicEntities();
     }
   }
 
@@ -232,6 +385,10 @@
     document.querySelectorAll("[data-auth-panel]").forEach((button) => {
       button.addEventListener("click", () => showAuth(button.dataset.authPanel));
     });
+
+    document.querySelectorAll("[data-login-mode]").forEach((button) => {
+      button.addEventListener("click", () => showLoginMode(button.dataset.loginMode));
+    });
   }
 
   async function logout() {
@@ -248,18 +405,7 @@
   }
 
   function bindForms() {
-    document.querySelector("#account-type").addEventListener("change", (event) => {
-      const isEntity = event.target.value === "Ente Pubblico";
-      document.querySelector(".registered-fields").hidden = isEntity;
-      document.querySelector(".entity-fields").hidden = !isEntity;
-
-      document.querySelectorAll("[data-registered-required]").forEach((input) => {
-        input.required = !isEntity;
-      });
-      document.querySelectorAll("[data-entity-required]").forEach((input) => {
-        input.required = isEntity;
-      });
-    });
+    document.querySelector("#public-entity-select").addEventListener("change", updatePublicEntityUniqueCodeRequirement);
 
     document.querySelectorAll("[data-category]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -274,7 +420,26 @@
       window.alert("Segnalazione pronta. Il salvataggio verra' collegato al modulo report.");
     });
 
-    document.querySelector("#login-form").addEventListener("submit", async (event) => {
+    document.querySelector("#user-login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setAuthMessage("Accesso in corso...");
+
+      try {
+        const payload = await requestJson("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify(formToObject(event.currentTarget)),
+        });
+
+        setToken(payload.tokenAccesso);
+        updateAuthState(payload.utente);
+        setAuthMessage("Accesso effettuato", "ok");
+        showView("home");
+      } catch (error) {
+        setAuthMessage(error.message, "error");
+      }
+    });
+
+    document.querySelector("#entity-login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       setAuthMessage("Accesso in corso...");
 
@@ -295,6 +460,16 @@
 
     document.querySelector("#register-form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const passwordInput = event.currentTarget.querySelector('input[name="password"]');
+      const indicator = event.currentTarget.querySelector("[data-password-strength]");
+      const strength = updatePasswordStrength(passwordInput, indicator);
+
+      if (!strength.isValid) {
+        setAuthMessage("La password deve avere almeno 10 caratteri, maiuscole, minuscole, numeri e simboli.", "error");
+        passwordInput.focus();
+        return;
+      }
+
       setAuthMessage("Registrazione in corso...");
 
       try {
@@ -329,6 +504,7 @@
 
       map.innerMap.setOptions({
         fullscreenControl: false,
+        keyboardShortcuts: false,
         mapTypeControl: false,
         streetViewControl: false,
         restriction: {
@@ -337,9 +513,44 @@
         },
       });
 
+      map.addEventListener("pointerdown", () => {
+        const activeElement = document.activeElement;
+
+        if (activeElement && activeElement !== document.body && typeof activeElement.blur === "function") {
+          activeElement.blur();
+        }
+      });
+
       map.innerMap.fitBounds(config.bounds);
 
       const infowindow = new google.maps.InfoWindow();
+
+      map.innerMap.addListener("click", (event) => {
+        const location = event.latLng;
+
+        if (!location) {
+          return;
+        }
+
+        if (!isInsideBounds(location)) {
+          selectedPlace = null;
+          reportPosition.value = "Seleziona un luogo in Provincia di Trento";
+          setStatus("Fuori area Trentino", "error");
+          infowindow.close();
+          marker.position = null;
+          return;
+        }
+
+        selectedPlace = { location };
+        reportPosition.value = formatCoordinates(location);
+        marker.position = location;
+        setStatus("Luogo selezionato", "ready");
+
+        infowindow.setContent(
+          `<strong>Luogo selezionato</strong><br><span>${formatCoordinates(location)}</span>`,
+        );
+        infowindow.open(map.innerMap, marker);
+      });
 
       placePicker.addEventListener("gmpx-placechange", () => {
         const place = placePicker.value;
@@ -392,6 +603,7 @@
     bindNavigation();
     bindForms();
     initPasswordToggles();
+    initPasswordStrengthIndicator();
     refreshCurrentUser();
     initMap();
   });
