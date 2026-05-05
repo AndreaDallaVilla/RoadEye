@@ -1,0 +1,737 @@
+openapi: 3.0.3
+info:
+  title: RoadEye API
+  version: 0.1.0
+  description: Specifica OpenAPI dei servizi REST esposti dal backend RoadEye.
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3000
+    description: Server locale di sviluppo
+
+tags:
+  - name: Health
+    description: Stato del servizio
+  - name: Auth
+    description: Registrazione, login e sessioni utente
+  - name: Maps
+    description: Servizi di geocodifica e configurazione Google Maps
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Verifica lo stato del servizio
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Servizio disponibile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Registra un nuovo account
+      operationId: registerUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/RegisterUtenteRequest"
+                - $ref: "#/components/schemas/RegisterEntePubblicoRequest"
+            examples:
+              utenteRegistrato:
+                summary: Utente registrato
+                value:
+                  tipoUtente: Utente Registrato
+                  email: mario.rossi@example.com
+                  codiceFiscale: RSSMRA90A01H501U
+                  password: Password123!
+                  nome: Mario
+                  cognome: Rossi
+                  nomeUtentePubblico: mario.rossi
+                  dataNascita: "1990-01-01"
+                  sesso: Maschio
+                  numeroTelefono: "+393331234567"
+                  localizzazioneAttiva: true
+                  notificheAttive: true
+              entePubblico:
+                summary: Ente pubblico
+                value:
+                  tipoUtente: Ente Pubblico
+                  email: comune@example.it
+                  codiceFiscale: "00355870221"
+                  password: Password123!
+                  denominazione: Comune
+                  pec: comune@pec.example.it
+                  codiceIpa: C_1378
+                  codiceUnivoco: KE9B1B
+                  localizzazioneAttiva: true
+                  notificheAttive: true
+      responses:
+        "201":
+          description: Account registrato e sessione creata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Effettua il login
+      operationId: loginUser
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            examples:
+              conEmail:
+                summary: Login con email
+                value:
+                  email: mario.rossi@example.com
+                  password: Password123!
+              entePubblico:
+                summary: Login ente pubblico con codici istituzionali
+                value:
+                  codiceFiscale: "00355870221"
+                  codiceIpa: C_1378
+                  codiceUnivoco: KE9B1B
+                  password: Password123!
+      responses:
+        "200":
+          description: Login effettuato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Recupera l'utente autenticato
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Utente autenticato
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - utente
+                properties:
+                  utente:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Revoca la sessione corrente
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logout effettuato
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - message
+                properties:
+                  message:
+                    type: string
+                    example: Logout effettuato con successo
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/maps/geocode:
+    get:
+      tags:
+        - Maps
+      summary: Geocodifica un indirizzo
+      operationId: geocodeAddress
+      security: []
+      parameters:
+        - name: indirizzo
+          in: query
+          description: Indirizzo da geocodificare. In alternativa e accettato anche il parametro address.
+          required: true
+          schema:
+            type: string
+          example: Piazza Duomo, Trento
+      responses:
+        "200":
+          description: Risultati di geocodifica
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeocodingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/maps/reverse-geocode:
+    get:
+      tags:
+        - Maps
+      summary: Geocodifica inversamente una coppia di coordinate
+      operationId: reverseGeocodeCoordinates
+      security: []
+      parameters:
+        - name: latitudine
+          in: query
+          description: Latitudine. In alternativa e accettato anche il parametro lat.
+          required: true
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          example: 46.0667
+        - name: longitudine
+          in: query
+          description: Longitudine. In alternativa sono accettati anche i parametri lng o lon.
+          required: true
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          example: 11.1211
+      responses:
+        "200":
+          description: Risultati di geocodifica inversa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeocodingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/maps/embed-url:
+    get:
+      tags:
+        - Maps
+      summary: Genera una URL di embed Google Maps
+      operationId: getEmbedUrl
+      security: []
+      parameters:
+        - name: query
+          in: query
+          description: Testo di ricerca. In alternativa sono accettati indirizzo o address.
+          required: false
+          schema:
+            type: string
+          example: Piazza Duomo, Trento
+        - name: placeId
+          in: query
+          description: Identificativo Google Place. In alternativa e accettato place_id.
+          required: false
+          schema:
+            type: string
+        - name: latitudine
+          in: query
+          description: Latitudine da usare se non vengono forniti query o placeId.
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: longitudine
+          in: query
+          description: Longitudine da usare se non vengono forniti query o placeId.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: zoom
+          in: query
+          description: Livello di zoom, limitato dal server tra 1 e 21.
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 21
+            default: 15
+      responses:
+        "200":
+          description: URL di embed generata
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - embedUrl
+                properties:
+                  embedUrl:
+                    type: string
+                    format: uri
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/maps/client-config:
+    get:
+      tags:
+        - Maps
+      summary: Restituisce la configurazione Google Maps per il client
+      operationId: getMapsClientConfig
+      security: []
+      responses:
+        "200":
+          description: Configurazione Google Maps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MapsClientConfig"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+
+  responses:
+    BadRequest:
+      description: Richiesta non valida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Autenticazione mancante o non valida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Operazione non consentita
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflitto con dati gia esistenti
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadGateway:
+      description: Servizio esterno non raggiungibile o risposta non valida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Servizio non configurato o non disponibile
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: Errore interno del server
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: roadeye-api
+
+    RegisterUtenteRequest:
+      type: object
+      required:
+        - tipoUtente
+        - email
+        - codiceFiscale
+        - password
+        - nome
+        - nomeUtentePubblico
+        - dataNascita
+      properties:
+        tipoUtente:
+          type: string
+          enum:
+            - Utente Registrato
+        email:
+          type: string
+          format: email
+        codiceFiscale:
+          type: string
+          minLength: 16
+          maxLength: 16
+        password:
+          type: string
+          format: password
+        nome:
+          type: string
+        cognome:
+          type: string
+        nomeUtentePubblico:
+          type: string
+          minLength: 3
+          maxLength: 30
+          pattern: "^[a-zA-Z0-9_.-]{3,30}$"
+        dataNascita:
+          type: string
+          format: date
+        sesso:
+          type: string
+          enum:
+            - Maschio
+            - Femmina
+        numeroTelefono:
+          type: string
+        localizzazioneAttiva:
+          type: boolean
+          default: false
+        notificheAttive:
+          type: boolean
+          default: false
+
+    RegisterEntePubblicoRequest:
+      type: object
+      required:
+        - tipoUtente
+        - email
+        - codiceFiscale
+        - password
+        - denominazione
+        - pec
+        - codiceIpa
+        - codiceUnivoco
+      properties:
+        tipoUtente:
+          type: string
+          enum:
+            - Ente Pubblico
+        email:
+          type: string
+          format: email
+        codiceFiscale:
+          type: string
+          minLength: 11
+          maxLength: 16
+        password:
+          type: string
+          format: password
+        denominazione:
+          type: string
+        pec:
+          type: string
+          format: email
+        codiceIpa:
+          type: string
+          minLength: 4
+          maxLength: 10
+          pattern: "^[A-Z0-9_]{4,10}$"
+        codiceUnivoco:
+          type: string
+          minLength: 4
+          maxLength: 10
+          pattern: "^[A-Z0-9]{4,10}$"
+        localizzazioneAttiva:
+          type: boolean
+          default: false
+        notificheAttive:
+          type: boolean
+          default: false
+
+    LoginRequest:
+      type: object
+      required:
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: Richiesta per il login classico con email e password.
+        codiceFiscale:
+          type: string
+          description: Richiesto insieme a codiceIpa e codiceUnivoco per il login di un ente pubblico senza email.
+        codiceIpa:
+          type: string
+        codiceUnivoco:
+          type: string
+        password:
+          type: string
+          format: password
+        codiceMfa:
+          type: string
+          description: Codice MFA richiesto solo se l'utente ha MFA attiva.
+
+    AuthResponse:
+      type: object
+      required:
+        - tokenAccesso
+        - utente
+      properties:
+        tokenAccesso:
+          type: string
+          description: Token da inviare nell'header Authorization come Bearer token.
+        utente:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required:
+        - _id
+        - tipoUtente
+        - codiceFiscale
+        - email
+        - statoAccount
+        - impostazioni
+        - profilo
+      properties:
+        _id:
+          type: string
+          example: 662f9d2a9a59c651d629f121
+        tipoUtente:
+          type: string
+          enum:
+            - Utente Registrato
+            - Ente Pubblico
+        codiceFiscale:
+          type: string
+        email:
+          type: string
+          format: email
+        statoAccount:
+          type: string
+          enum:
+            - Attivo
+            - Sospeso
+        impostazioni:
+          $ref: "#/components/schemas/UserSettings"
+        profilo:
+          $ref: "#/components/schemas/UserProfile"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UserSettings:
+      type: object
+      properties:
+        localizzazioneAttiva:
+          type: boolean
+        mfaAttiva:
+          type: boolean
+        notificheAttive:
+          type: boolean
+
+    UserProfile:
+      type: object
+      properties:
+        nome:
+          type: string
+        cognome:
+          type: string
+        nomeUtentePubblico:
+          type: string
+        dataNascita:
+          type: string
+          format: date-time
+        sesso:
+          type: string
+          enum:
+            - Maschio
+            - Femmina
+        numeroTelefono:
+          type: string
+        denominazione:
+          type: string
+        pec:
+          type: string
+          format: email
+        codiceIpa:
+          type: string
+        codiceUnivoco:
+          type: string
+        categoria:
+          type: string
+          enum:
+            - Comune
+            - ForzePolizia
+            - PoliziaLocale
+            - VigiliDelfuoco
+            - ServizioDiSoccorso
+
+    GeocodingResponse:
+      type: object
+      required:
+        - status
+        - risultati
+      properties:
+        status:
+          type: string
+          example: OK
+        risultati:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeocodingResult"
+
+    GeocodingResult:
+      type: object
+      properties:
+        indirizzoFormattato:
+          type: string
+        placeId:
+          type: string
+        coordinate:
+          $ref: "#/components/schemas/Coordinates"
+        tipoPosizione:
+          type: string
+        viewport:
+          type: object
+          additionalProperties: true
+        tipi:
+          type: array
+          items:
+            type: string
+
+    Coordinates:
+      type: object
+      required:
+        - latitudine
+        - longitudine
+      properties:
+        latitudine:
+          type: number
+          minimum: -90
+          maximum: 90
+        longitudine:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    MapsClientConfig:
+      type: object
+      required:
+        - apiKey
+        - language
+        - region
+        - mapId
+        - center
+        - zoom
+        - bounds
+        - areaLabel
+      properties:
+        apiKey:
+          type: string
+        language:
+          type: string
+          example: it
+        region:
+          type: string
+          example: it
+        mapId:
+          type: string
+        center:
+          $ref: "#/components/schemas/Coordinates"
+        zoom:
+          type: integer
+          example: 10
+        bounds:
+          type: object
+          required:
+            - north
+            - south
+            - east
+            - west
+          properties:
+            north:
+              type: number
+            south:
+              type: number
+            east:
+              type: number
+            west:
+              type: number
+        areaLabel:
+          type: string
+          example: Provincia autonoma di Trento
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
