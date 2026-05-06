@@ -507,6 +507,7 @@
         keyboardShortcuts: false,
         mapTypeControl: false,
         streetViewControl: false,
+        clickableIcons: false,
         restriction: {
           latLngBounds: config.bounds,
           strictBounds: false,
