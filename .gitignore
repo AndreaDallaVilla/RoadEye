@@ -22,8 +22,3 @@ temp/
 *.tmp
 *.bak
 *.local
-src/scripts/testPasswordValidation.js
-src/scripts/testCodiceFiscaleUtils.js
-src/scripts/testSessionTokenUtils.js
-src/scripts/testIdentificazioneEntePubblico.js
-src/scripts/testHttpErrorUtils.js
