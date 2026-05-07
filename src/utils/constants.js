@@ -26,6 +26,7 @@ const CATEGORIE_ENTI_PUBBLICI = Object.freeze({
   POLIZIA_LOCALE: "PoliziaLocale",
   VIGILI_DEL_FUOCO: "VigiliDelfuoco",
   SERVIZIO_DI_SOCCORSO: "ServizioDiSoccorso",
+  CENTRALE_OPERATIVA: "CentraleOperativa",
 });
 
 const VALORI_CATEGORIE_ENTI_PUBBLICI = Object.freeze(
@@ -85,6 +86,14 @@ const REGOLE_IDENTIFICAZIONE_ENTI_PUBBLICI = Object.freeze([
     denominazione: "Comune",
     codiceFiscale: "00355870221",
     codiceIpa: "C_1378",
+  }),
+  Object.freeze({
+    identificativoIstituzionale: "Centrale_Operativa",
+    categoria: CATEGORIE_ENTI_PUBBLICI.CENTRALE_OPERATIVA,
+    denominazione: "Centrale Operativa",
+    codiceFiscale: "00355870221",
+    codiceIpa: "P_TN",
+    codiceUnivoco: "00EFWV",
   }),
 ]);
 
