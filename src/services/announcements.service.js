@@ -21,6 +21,17 @@ exports.creaAnnuncio = async function (datiAnnuncio) {
 
 }
 
+exports.listaAnnunciAttivi = async function () {
+    return Annuncio.find({
+        stato: "Attivo",
+        "coordinate.latitudine": { $type: "number" },
+        "coordinate.longitudine": { $type: "number" }
+    })
+        .sort({ dataOraPubblicazione: -1 })
+        .select("idAnnuncio descrizione topic gravita posizione coordinate dataOraPubblicazione")
+        .lean();
+};
+
 
 
 
@@ -98,14 +109,6 @@ function incrementaCodice(codice) {
 
     return prefix + numberStr; // si uniscono le due parti 
 }
-// Test
-console.log(incrementaCodice("er1234")); // er1235
-console.log(incrementaCodice("er9999")); // es0000
-console.log(incrementaCodice("ez9999")); // fa0000
-
-
-
-
 /*
     idAnnuncio: { 
     descrizione: {

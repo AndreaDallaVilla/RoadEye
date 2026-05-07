@@ -20,6 +20,25 @@ const annuncioSchema = new mongoose.Schema({
         required: false,
         maxlength: 1000
     },
+    posizione: {
+        type: String,
+        required: false,
+        trim: true
+    },
+    coordinate: {
+        latitudine: {
+            type: Number,
+            required: false,
+            min: -90,
+            max: 90
+        },
+        longitudine: {
+            type: Number,
+            required: false,
+            min: -180,
+            max: 180
+        }
+    },
     dataOraPubblicazione: {
         type: Date,
         required: true
@@ -65,4 +84,4 @@ const annuncioSchema = new mongoose.Schema({
     }
 }, {timestamps: true});
 
-module.exports = mongoose.model("Annuncio", annuncioSchema);
+module.exports = mongoose.model("Annuncio", annuncioSchema, "annunci");
