@@ -14,6 +14,10 @@
 
 - [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
 
+## Premise
+> [!NOTE]
+> This branch contains files used for testing various functionalities. It is possible to replicate by using the scripts by following the
+> the present path -> src/scripts
 
 ## Terminal commands:
 - Authentication: **npm run test:auth-api:auto**
