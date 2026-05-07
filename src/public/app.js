@@ -1,5 +1,14 @@
 (function () {
   const TOKEN_KEY = "roadeye.token";
+  const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"];
+  const TOPIC_MARKER_COLORS = {
+    "Incidente stradale": "#d93025",
+    "Cantiere stradale": "#f9ab00",
+    Evento: "#1a73e8",
+    "Ferimento animali": "#8e24aa",
+    "Pericolo bordo strada": "#e8710a",
+    Autovelox: "#188038",
+  };
 
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
@@ -9,8 +18,18 @@
   const drawerUser = document.querySelector("#drawer-user");
   const headerAuthButton = document.querySelector("#header-auth-button");
   const authMessage = document.querySelector("#auth-message");
+  const homeMapHost = document.querySelector("#home-map-host");
+  const reportMapHost = document.querySelector("#report-map-host");
+  const sharedMapPanel = document.querySelector("#shared-map-panel");
+  const reportTopicStep = document.querySelector("#report-topic-step");
+  const reportForm = document.querySelector("#report-form");
   const reportPosition = document.querySelector("#report-position");
+  const reportLatitude = document.querySelector("#report-latitude");
+  const reportLongitude = document.querySelector("#report-longitude");
   const reportCategory = document.querySelector("#report-category");
+  const severityDialog = document.querySelector("#severity-dialog");
+  const severityRange = document.querySelector("#severity-range");
+  const severityLabel = document.querySelector("#severity-label");
   const headerSectionTitle = document.querySelector("#header-section-title");
 
   const viewTitles = {
@@ -25,8 +44,16 @@
   };
 
   let selectedPlace = null;
+  let selectedLocation = null;
   let allowedBounds = null;
   let currentView = "home";
+  let currentReportStep = "topic";
+  let publicEntities = [];
+  let pendingReportForm = null;
+  let announcementMarkers = [];
+  let selectionInfoWindow = null;
+  let reportPositionAutocomplete = null;
+  const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) {
     status.textContent = message;
@@ -65,6 +92,181 @@
     return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
   }
 
+  function getPlainLocation(location) {
+    if (!location) {
+      return null;
+    }
+
+    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
+    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+      return null;
+    }
+
+    return {
+      lat: Number(lat),
+      lng: Number(lng),
+    };
+  }
+
+  function setSelectedLocation(location, address) {
+    const normalizedLocation = getPlainLocation(location);
+
+    selectedLocation = normalizedLocation;
+    reportLatitude.value = normalizedLocation ? String(normalizedLocation.lat) : "";
+    reportLongitude.value = normalizedLocation ? String(normalizedLocation.lng) : "";
+    reportPosition.value = address || (normalizedLocation ? formatCoordinates(normalizedLocation) : "");
+  }
+
+  function isReportLocationSelectionActive() {
+    return currentView === "report" && currentReportStep === "details";
+  }
+
+  function updateSelectionMarkerVisibility() {
+    if (!marker) {
+      return;
+    }
+
+    if (isReportLocationSelectionActive() && selectedLocation) {
+      marker.position = selectedLocation;
+      return;
+    }
+
+    marker.position = null;
+    selectionInfoWindow?.close();
+  }
+
+  function shouldShowAnnouncementMarkers() {
+    return currentView === "home";
+  }
+
+  function updateAnnouncementMarkersVisibility() {
+    if (!map?.innerMap) {
+      return;
+    }
+
+    const markerMap = shouldShowAnnouncementMarkers() ? map.innerMap : null;
+
+    announcementMarkers.forEach((announcementMarker) => {
+      announcementMarker.map = markerMap;
+    });
+  }
+
+  function getAddressFromGeocodeResult(result) {
+    return result?.indirizzoFormattato || "";
+  }
+
+  async function reverseGeocodeLocation(location) {
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation) {
+      return "";
+    }
+
+    const params = new URLSearchParams({
+      latitudine: String(normalizedLocation.lat),
+      longitudine: String(normalizedLocation.lng),
+    });
+    const payload = await requestJson(`/api/maps/reverse-geocode?${params.toString()}`);
+    return getAddressFromGeocodeResult(payload.risultati?.[0]);
+  }
+
+  async function geocodeAddress(address) {
+    const params = new URLSearchParams({ indirizzo: address });
+    const payload = await requestJson(`/api/maps/geocode?${params.toString()}`);
+    const result = payload.risultati?.[0];
+
+    if (!result?.coordinate) {
+      return null;
+    }
+
+    return {
+      address: getAddressFromGeocodeResult(result),
+      location: {
+        lat: result.coordinate.latitudine,
+        lng: result.coordinate.longitudine,
+      },
+    };
+  }
+
+  function handleReportPlaceSelection(place, infowindow) {
+    const location = place.geometry?.location;
+
+    if (!location) {
+      selectedPlace = null;
+      selectedLocation = null;
+      reportLatitude.value = "";
+      reportLongitude.value = "";
+      setStatus("Luogo non trovato", "error");
+      updateSelectionMarkerVisibility();
+      return;
+    }
+
+    if (!isInsideBounds(location)) {
+      selectedPlace = null;
+      selectedLocation = null;
+      reportPosition.value = "Seleziona un luogo in Provincia di Trento";
+      reportLatitude.value = "";
+      reportLongitude.value = "";
+      setStatus("Fuori area Trentino", "error");
+      updateSelectionMarkerVisibility();
+      return;
+    }
+
+    selectedPlace = place;
+    setSelectedLocation(location, place.formatted_address || place.name || formatCoordinates(location));
+
+    if (place.geometry.viewport) {
+      map.innerMap.fitBounds(place.geometry.viewport);
+    } else {
+      map.center = location;
+      map.zoom = 17;
+    }
+
+    marker.position = location;
+    setStatus("Luogo selezionato", "ready");
+
+    infowindow.setContent(
+      `<strong>${place.name || "Luogo selezionato"}</strong><br><span>${reportPosition.value}</span>`,
+    );
+    infowindow.open(map.innerMap, marker);
+  }
+
+  async function setupReportPositionAutocomplete(config, infowindow) {
+    if (!reportPosition || reportPositionAutocomplete || typeof google === "undefined") {
+      return;
+    }
+
+    if (!google.maps.places && google.maps.importLibrary) {
+      await google.maps.importLibrary("places");
+    }
+
+    if (!google.maps.places?.Autocomplete) {
+      return;
+    }
+
+    const bounds = new google.maps.LatLngBounds(
+      { lat: config.bounds.south, lng: config.bounds.west },
+      { lat: config.bounds.north, lng: config.bounds.east },
+    );
+
+    reportPositionAutocomplete = new google.maps.places.Autocomplete(reportPosition, {
+      bounds,
+      componentRestrictions: { country: "it" },
+      fields: ["formatted_address", "geometry", "name"],
+      strictBounds: true,
+    });
+
+    reportPositionAutocomplete.addListener("place_changed", () => {
+      if (!isReportLocationSelectionActive()) {
+        return;
+      }
+
+      handleReportPlaceSelection(reportPositionAutocomplete.getPlace(), infowindow);
+    });
+  }
+
   function createApiLoader(config) {
     const loader = document.createElement("gmpx-api-loader");
     loader.setAttribute("key", config.apiKey);
@@ -91,6 +293,13 @@
   }
 
   function showView(viewName) {
+    if (viewName === "report" && !getToken()) {
+      window.alert("Devi effettuare l'accesso per creare un annuncio.");
+      drawer.classList.remove("open");
+      showAuth("login");
+      return;
+    }
+
     if (viewName === currentView) {
       drawer.classList.remove("open");
       return;
@@ -103,7 +312,115 @@
     document.querySelector(`#${viewName}-screen`).classList.add("active");
     currentView = viewName;
     headerSectionTitle.textContent = viewTitles[viewName] || "Home";
+
+    if (viewName === "report") {
+      showReportStep("topic");
+    } else if (viewName === "home") {
+      moveMapPanel("home");
+    }
+
     drawer.classList.remove("open");
+  }
+
+  function showReportStep(stepName) {
+    const isTopicStep = stepName === "topic";
+
+    currentReportStep = stepName;
+    reportTopicStep.classList.toggle("active", isTopicStep);
+    reportForm.classList.toggle("active", !isTopicStep);
+    moveMapPanel(isTopicStep ? "home" : "report");
+  }
+
+  function moveMapPanel(target) {
+    const host = target === "report" ? reportMapHost : homeMapHost;
+
+    if (!host || !sharedMapPanel) {
+      return;
+    }
+
+    if (sharedMapPanel.parentElement !== host) {
+      host.append(sharedMapPanel);
+    }
+
+    sharedMapPanel.classList.toggle("in-report", target === "report");
+    updateSelectionMarkerVisibility();
+    updateAnnouncementMarkersVisibility();
+
+    window.setTimeout(() => {
+      if (map?.innerMap && typeof google !== "undefined") {
+        google.maps.event.trigger(map.innerMap, "resize");
+      }
+    }, 0);
+  }
+
+  function getSelectedSeverity() {
+    return severityValues[Number(severityRange.value) - 1] || "Media";
+  }
+
+  function updateSeveritySlider() {
+    const value = Number(severityRange.value);
+    const max = Number(severityRange.max);
+    const progress = ((value - 1) / (max - 1)) * 100;
+    const hue = 120 - progress * 1.2;
+    const color = `hsl(${hue}, 78%, 38%)`;
+
+    severityLabel.textContent = getSelectedSeverity();
+    severityRange.style.setProperty("--severity-color", color);
+    severityRange.style.setProperty("--severity-progress", `${progress}%`);
+  }
+
+  function buildAnnouncementPayload(form, gravita) {
+    const data = formToObject(form);
+    const latitudine = Number(data.latitudine);
+    const longitudine = Number(data.longitudine);
+    const hasCoordinates = Number.isFinite(latitudine) && Number.isFinite(longitudine);
+
+    return {
+      descrizione: data.descrizione || "",
+      topic: data.topic,
+      posizione: data.posizione,
+      ...(hasCoordinates ? {
+        coordinate: {
+          latitudine,
+          longitudine,
+        },
+      } : {}),
+      ...(gravita ? { gravita } : {}),
+      tempoVitaResiduo: 24,
+      interazioneConsentita: "Utenti Registrati",
+    };
+  }
+
+  async function publishAnnouncement(form, gravita) {
+    if (!reportLatitude.value || !reportLongitude.value) {
+      const typedAddress = reportPosition.value.trim();
+      const geocoded = typedAddress ? await geocodeAddress(typedAddress) : null;
+
+      if (!geocoded || !isInsideBounds(geocoded.location)) {
+        window.alert("Seleziona una posizione valida in Provincia di Trento.");
+        return;
+      }
+
+      setSelectedLocation(geocoded.location, geocoded.address || typedAddress);
+    }
+
+    const payload = buildAnnouncementPayload(form, gravita);
+
+    await requestJson("/api/announcements", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    form.reset();
+    selectedPlace = null;
+    selectedLocation = null;
+    updateSelectionMarkerVisibility();
+    reportCategory.value = "";
+    document.querySelectorAll("[data-category]").forEach((item) => item.classList.remove("selected"));
+    showReportStep("topic");
+    await loadActiveAnnouncements();
+    window.alert("Annuncio pubblicato.");
+    showView("home");
   }
 
   function showAuth(panelName) {
@@ -140,6 +457,74 @@
         input.focus();
       });
     });
+  }
+
+  function getPasswordStrength(password) {
+    const checks = [
+      password.length >= 10,
+      /[0-9]/.test(password),
+      /[A-Z]/.test(password),
+      /[a-z]/.test(password),
+      /[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password),
+    ];
+    const score = checks.filter(Boolean).length;
+
+    if (!password) {
+      return {
+        isValid: false,
+        state: "",
+        label: "Inserisci una password",
+      };
+    }
+
+    if (score <= 2) {
+      return {
+        isValid: false,
+        state: "is-weak",
+        label: "Password debole",
+      };
+    }
+
+    if (score <= 4) {
+      return {
+        isValid: false,
+        state: score === 3 ? "is-fair" : "is-good",
+        label: score === 3 ? "Password media" : "Quasi forte",
+      };
+    }
+
+    return {
+      isValid: true,
+      state: "is-strong",
+      label: "Password forte",
+    };
+  }
+
+  function updatePasswordStrength(input, indicator) {
+    const strength = getPasswordStrength(input.value);
+    const text = indicator.querySelector(".strength-text");
+
+    indicator.classList.remove("is-weak", "is-fair", "is-good", "is-strong");
+
+    if (strength.state) {
+      indicator.classList.add(strength.state);
+    }
+
+    text.textContent = strength.label;
+    return strength;
+  }
+
+  function initPasswordStrengthIndicator() {
+    const registerForm = document.querySelector("#register-form");
+    const passwordInput = registerForm.querySelector('input[name="password"]');
+    const indicator = registerForm.querySelector("[data-password-strength]");
+
+    if (!passwordInput || !indicator) {
+      return;
+    }
+
+    updatePasswordStrength(passwordInput, indicator);
+    passwordInput.addEventListener("input", () => updatePasswordStrength(passwordInput, indicator));
   }
 
   async function requestJson(url, options) {
@@ -188,7 +573,8 @@
     }
 
     const profile = user.profilo || {};
-    drawerUser.textContent = `Ciao, ${profile.nomeUtentePubblico || profile.nome || profile.denominazione || user.email}`;
+    const fullName = [profile.nome, profile.cognome].filter(Boolean).join(" ");
+    drawerUser.textContent = `Ciao, ${profile.nomeUtentePubblico || fullName || profile.denominazione || user.email}`;
     headerAuthButton.textContent = "Esci";
     headerAuthButton.classList.add("is-logged-in");
     headerAuthButton.setAttribute("aria-label", "Esci");
@@ -206,6 +592,89 @@
     } catch (_error) {
       setToken(null);
       updateAuthState(null);
+    }
+  }
+
+  function updatePublicEntityUniqueCodeRequirement() {
+    const select = document.querySelector("#public-entity-select");
+    const row = document.querySelector("#entity-unique-code-row");
+    const input = row ? row.querySelector("input") : null;
+    const selectedEntity = publicEntities.find((entity) => entity.id === select.value);
+    const isRequired = Boolean(selectedEntity?.richiedeCodiceUnivoco);
+
+    if (!input || !row) {
+      return;
+    }
+
+    input.required = isRequired;
+    row.hidden = !selectedEntity || !isRequired;
+
+    if (!isRequired) {
+      input.value = "";
+    }
+  }
+
+  async function loadPublicEntities() {
+    const select = document.querySelector("#public-entity-select");
+
+    if (!select) {
+      return;
+    }
+
+    try {
+      const payload = await requestJson("/api/auth/public-entities");
+      publicEntities = payload.enti || [];
+
+      select.innerHTML = "";
+
+      if (publicEntities.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Nessun ente disponibile";
+        select.append(option);
+        select.disabled = true;
+        updatePublicEntityUniqueCodeRequirement();
+        return;
+      }
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Seleziona ente";
+      select.append(placeholder);
+
+      publicEntities.forEach((entity) => {
+        const option = document.createElement("option");
+        option.value = entity.id;
+        option.textContent = entity.denominazione || "Ente senza denominazione";
+        select.append(option);
+      });
+
+      select.disabled = false;
+      updatePublicEntityUniqueCodeRequirement();
+    } catch (error) {
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Enti non disponibili";
+      select.append(option);
+      select.disabled = true;
+      setAuthMessage(error.message, "error");
+    }
+  }
+
+  function showLoginMode(mode) {
+    document.querySelectorAll("[data-login-mode]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.loginMode === mode);
+    });
+
+    document.querySelectorAll("[data-login-panel]").forEach((panel) => {
+      panel.classList.toggle("active", panel.dataset.loginPanel === mode);
+    });
+
+    setAuthMessage("");
+
+    if (mode === "entity") {
+      loadPublicEntities();
     }
   }
 
@@ -232,6 +701,10 @@
     document.querySelectorAll("[data-auth-panel]").forEach((button) => {
       button.addEventListener("click", () => showAuth(button.dataset.authPanel));
     });
+
+    document.querySelectorAll("[data-login-mode]").forEach((button) => {
+      button.addEventListener("click", () => showLoginMode(button.dataset.loginMode));
+    });
   }
 
   async function logout() {
@@ -248,17 +721,13 @@
   }
 
   function bindForms() {
-    document.querySelector("#account-type").addEventListener("change", (event) => {
-      const isEntity = event.target.value === "Ente Pubblico";
-      document.querySelector(".registered-fields").hidden = isEntity;
-      document.querySelector(".entity-fields").hidden = !isEntity;
+    document.querySelector("#public-entity-select").addEventListener("change", updatePublicEntityUniqueCodeRequirement);
 
-      document.querySelectorAll("[data-registered-required]").forEach((input) => {
-        input.required = !isEntity;
-      });
-      document.querySelectorAll("[data-entity-required]").forEach((input) => {
-        input.required = isEntity;
-      });
+    reportPosition.addEventListener("input", () => {
+      selectedPlace = null;
+      selectedLocation = null;
+      reportLatitude.value = "";
+      reportLongitude.value = "";
     });
 
     document.querySelectorAll("[data-category]").forEach((button) => {
@@ -266,15 +735,79 @@
         document.querySelectorAll("[data-category]").forEach((item) => item.classList.remove("selected"));
         button.classList.add("selected");
         reportCategory.value = button.dataset.category;
+        showReportStep("details");
       });
     });
 
-    document.querySelector("#report-form").addEventListener("submit", (event) => {
-      event.preventDefault();
-      window.alert("Segnalazione pronta. Il salvataggio verra' collegato al modulo report.");
+    document.querySelector("#report-topics-back-home").addEventListener("click", () => showView("home"));
+
+    document.querySelector("#report-back-to-topics").addEventListener("click", () => showReportStep("topic"));
+
+    severityRange.addEventListener("input", updateSeveritySlider);
+    updateSeveritySlider();
+
+    document.querySelector("#confirm-severity").addEventListener("click", async () => {
+      if (!pendingReportForm) {
+        return;
+      }
+
+      try {
+        await publishAnnouncement(pendingReportForm, getSelectedSeverity());
+        pendingReportForm = null;
+        severityDialog.close();
+      } catch (error) {
+        window.alert(error.message);
+      }
     });
 
-    document.querySelector("#login-form").addEventListener("submit", async (event) => {
+    severityDialog.addEventListener("close", () => {
+      pendingReportForm = null;
+    });
+
+    document.querySelector("#report-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const topic = reportCategory.value;
+
+      if (!topic) {
+        showReportStep("topic");
+        return;
+      }
+
+      if (SEVERITY_TOPICS.includes(topic)) {
+        pendingReportForm = event.currentTarget;
+        severityRange.value = "2";
+        updateSeveritySlider();
+        severityDialog.showModal();
+        return;
+      }
+
+      try {
+        await publishAnnouncement(event.currentTarget);
+      } catch (error) {
+        window.alert(error.message);
+      }
+    });
+
+    document.querySelector("#user-login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      setAuthMessage("Accesso in corso...");
+
+      try {
+        const payload = await requestJson("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify(formToObject(event.currentTarget)),
+        });
+
+        setToken(payload.tokenAccesso);
+        updateAuthState(payload.utente);
+        setAuthMessage("Accesso effettuato", "ok");
+        showView("home");
+      } catch (error) {
+        setAuthMessage(error.message, "error");
+      }
+    });
+
+    document.querySelector("#entity-login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       setAuthMessage("Accesso in corso...");
 
@@ -295,6 +828,16 @@
 
     document.querySelector("#register-form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const passwordInput = event.currentTarget.querySelector('input[name="password"]');
+      const indicator = event.currentTarget.querySelector("[data-password-strength]");
+      const strength = updatePasswordStrength(passwordInput, indicator);
+
+      if (!strength.isValid) {
+        setAuthMessage("La password deve avere almeno 10 caratteri, maiuscole, minuscole, numeri e simboli.", "error");
+        passwordInput.focus();
+        return;
+      }
+
       setAuthMessage("Registrazione in corso...");
 
       try {
@@ -329,42 +872,123 @@
 
       map.innerMap.setOptions({
         fullscreenControl: false,
+        keyboardShortcuts: false,
         mapTypeControl: false,
         streetViewControl: false,
+        clickableIcons: false,
         restriction: {
           latLngBounds: config.bounds,
           strictBounds: false,
         },
       });
 
+      map.addEventListener("pointerdown", () => {
+        const activeElement = document.activeElement;
+
+        if (activeElement && activeElement !== document.body && typeof activeElement.blur === "function") {
+          activeElement.blur();
+        }
+      });
+
       map.innerMap.fitBounds(config.bounds);
 
       const infowindow = new google.maps.InfoWindow();
+      selectionInfoWindow = infowindow;
+      await setupReportPositionAutocomplete(config, infowindow);
+
+      map.innerMap.addListener("click", async (event) => {
+        const location = event.latLng;
+
+        if (!location) {
+          return;
+        }
+
+        if (!isReportLocationSelectionActive()) {
+          selectionInfoWindow?.close();
+          return;
+        }
+
+        if (!isInsideBounds(location)) {
+          selectedPlace = null;
+          selectedLocation = null;
+          reportPosition.value = "Seleziona un luogo in Provincia di Trento";
+          reportLatitude.value = "";
+          reportLongitude.value = "";
+          setStatus("Fuori area Trentino", "error");
+          infowindow.close();
+          updateSelectionMarkerVisibility();
+          return;
+        }
+
+        marker.position = location;
+        setStatus("Ricerca indirizzo...", "ready");
+
+        try {
+          const address = await reverseGeocodeLocation(location);
+          selectedPlace = { location };
+          setSelectedLocation(location, address || formatCoordinates(location));
+          setStatus("Luogo selezionato", "ready");
+
+          infowindow.setContent(
+            `<strong>Luogo selezionato</strong><br><span>${reportPosition.value}</span>`,
+          );
+          infowindow.open(map.innerMap, marker);
+        } catch (error) {
+          setSelectedLocation(location, formatCoordinates(location));
+          setStatus(error.message, "error");
+        }
+      });
 
       placePicker.addEventListener("gmpx-placechange", () => {
         const place = placePicker.value;
 
         if (!place.location) {
-          selectedPlace = null;
-          reportPosition.value = "Luogo non trovato";
+          if (isReportLocationSelectionActive()) {
+            selectedPlace = null;
+            selectedLocation = null;
+            reportPosition.value = "Luogo non trovato";
+            reportLatitude.value = "";
+            reportLongitude.value = "";
+          }
+
           setStatus("Luogo non trovato", "error");
           infowindow.close();
-          marker.position = null;
+          updateSelectionMarkerVisibility();
           return;
         }
 
         if (!isInsideBounds(place.location)) {
-          selectedPlace = null;
-          reportPosition.value = "Seleziona un luogo in Provincia di Trento";
+          if (isReportLocationSelectionActive()) {
+            selectedPlace = null;
+            selectedLocation = null;
+            reportPosition.value = "Seleziona un luogo in Provincia di Trento";
+            reportLatitude.value = "";
+            reportLongitude.value = "";
+          }
+
           setStatus("Fuori area Trentino", "error");
           infowindow.close();
-          marker.position = null;
+          updateSelectionMarkerVisibility();
           map.innerMap.fitBounds(config.bounds);
           return;
         }
 
+        if (!isReportLocationSelectionActive()) {
+          if (place.viewport) {
+            map.innerMap.fitBounds(place.viewport);
+          } else {
+            map.center = place.location;
+            map.zoom = 17;
+          }
+
+          setStatus("Mappa aggiornata", "ready");
+          infowindow.close();
+          updateSelectionMarkerVisibility();
+          return;
+        }
+
         selectedPlace = place;
-        reportPosition.value = place.formattedAddress || place.displayName || formatCoordinates(place.location);
+        setSelectedLocation(place.location, place.formattedAddress || place.displayName || formatCoordinates(place.location));
 
         if (place.viewport) {
           map.innerMap.fitBounds(place.viewport);
@@ -382,16 +1006,72 @@
         infowindow.open(map.innerMap, marker);
       });
 
+      await loadActiveAnnouncements();
       setStatus("Mappa pronta", "ready");
     } catch (error) {
       setStatus(error.message, "error");
     }
   }
 
+  function clearAnnouncementMarkers() {
+    announcementMarkers.forEach((announcementMarker) => {
+      announcementMarker.map = null;
+    });
+    announcementMarkers = [];
+  }
+
+  function createAnnouncementMarker(announcement) {
+    const position = {
+      lat: announcement.coordinate.latitudine,
+      lng: announcement.coordinate.longitudine,
+    };
+    const color = TOPIC_MARKER_COLORS[announcement.topic] || "#141414";
+    const pin = new google.maps.marker.PinElement({
+      background: color,
+      borderColor: "#141414",
+      glyphColor: "#ffffff",
+      glyph: announcement.topic?.charAt(0) || "",
+    });
+    const title = `${announcement.topic}${announcement.posizione ? ` - ${announcement.posizione}` : ""}`;
+    const markerElement = new google.maps.marker.AdvancedMarkerElement({
+      map: shouldShowAnnouncementMarkers() ? map.innerMap : null,
+      position,
+      title,
+      content: pin.element,
+    });
+    const content = [
+      `<strong>${announcement.topic}</strong>`,
+      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
+      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
+    ].filter(Boolean).join("<br>");
+    const infoWindow = new google.maps.InfoWindow({ content });
+
+    markerElement.addListener("click", () => {
+      infoWindow.open(map.innerMap, markerElement);
+    });
+
+    return markerElement;
+  }
+
+  async function loadActiveAnnouncements() {
+    if (!map?.innerMap || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    const payload = await requestJson("/api/announcements/active");
+    clearAnnouncementMarkers();
+
+    announcementMarkers = (payload.data || [])
+      .filter((announcement) => announcement.coordinate?.latitudine && announcement.coordinate?.longitudine)
+      .map(createAnnouncementMarker);
+    updateAnnouncementMarkersVisibility();
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
     bindForms();
     initPasswordToggles();
+    initPasswordStrengthIndicator();
     refreshCurrentUser();
     initMap();
   });

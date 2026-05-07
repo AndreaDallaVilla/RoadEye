@@ -35,28 +35,32 @@
 
       <main>
         <section class="screen active" id="home-screen">
-          <div class="search-row">
-            <div class="map-search-host">
-              <gmpx-place-picker placeholder="Cerca in Provincia di Trento"></gmpx-place-picker>
+          <div id="home-map-host">
+            <div class="map-panel" id="shared-map-panel">
+              <div class="search-row">
+                <div class="map-search-host">
+                  <gmpx-place-picker placeholder="Cerca in Provincia di Trento"></gmpx-place-picker>
+                </div>
+              </div>
+
+              <div class="chip-row" aria-label="Filtri segnalazioni">
+                <button type="button">Trentino</button>
+                <button type="button">Tutte</button>
+                <button type="button">Incidenti</button>
+                <button type="button">Autovelox</button>
+                <button type="button">Pericolo bordo strada</button>
+                <button type="button">Eventi</button>
+                <button type="button">Cantieri</button>
+                <button type="button">Ferimento animali</button>
+              </div>
+
+              <div class="map-box">
+                <gmp-map id="roadeye-map">
+                  <gmp-advanced-marker></gmp-advanced-marker>
+                </gmp-map>
+                <div class="map-status" id="maps-status">Caricamento mappa</div>
+              </div>
             </div>
-          </div>
-
-          <div class="chip-row" aria-label="Filtri segnalazioni">
-            <button type="button">Trentino</button>
-            <button type="button">Tutte</button>
-            <button type="button">Incidenti</button>
-            <button type="button">Autovelox</button>
-            <button type="button">Pericolo bordo strada</button>
-            <button type="button">Eventi</button>
-            <button type="button">Cantieri</button>
-            <button type="button">Ferimento animali</button>
-          </div>
-
-          <div class="map-box">
-            <gmp-map id="roadeye-map">
-              <gmp-advanced-marker></gmp-advanced-marker>
-            </gmp-map>
-            <div class="map-status" id="maps-status">Caricamento mappa</div>
           </div>
 
           <section class="news-box">
@@ -70,42 +74,53 @@
         </section>
 
         <section class="screen" id="report-screen">
-          <div class="screen-head">
-            <button class="link-button" type="button" data-view="home">Mappa</button>
-            <button class="icon-button" type="button" data-view="home" aria-label="Chiudi">×</button>
+          <div class="report-step active" id="report-topic-step">
+            <div class="category-grid">
+              <button type="button" data-category="Incidente stradale">Incidente stradale <span>!</span></button>
+              <button type="button" data-category="Cantiere stradale">Cantiere stradale <span>#</span></button>
+              <button type="button" data-category="Evento">Evento <span>*</span></button>
+              <button type="button" data-category="Ferimento animali">Ferimento animali <span>+</span></button>
+              <button type="button" data-category="Pericolo bordo strada">Pericolo bordo strada <span>^</span></button>
+              <button type="button" data-category="Autovelox">Autovelox <span>@</span></button>
+            </div>
+            <button class="outline-button full" id="report-topics-back-home" type="button">Indietro</button>
           </div>
 
-          <h2>Aggiungi segnalazione</h2>
-          <div class="category-grid">
-            <button type="button" data-category="Incidente tra autoveicoli">Incidente tra autoveicoli <span>🚗</span></button>
-            <button type="button" data-category="Cantiere stradale">Cantiere stradale <span>🚧</span></button>
-            <button type="button" data-category="Evento">Evento <span>🎙</span></button>
-            <button type="button" data-category="Ferimento animale">Ferimento animale <span>⚠</span></button>
-            <button type="button" data-category="Percorso bordo strada">Percorso bordo strada <span>△</span></button>
-          </div>
-
-          <form class="wire-form" id="report-form">
+          <form class="wire-form report-step" id="report-form">
             <label>
               Posizione
-              <input id="report-position" name="posizione" type="text" readonly value="Seleziona un luogo dalla mappa">
+              <input id="report-position" name="posizione" type="text" placeholder="Premi sulla mappa o scrivi un indirizzo" required>
+              <input id="report-latitude" name="latitudine" type="hidden">
+              <input id="report-longitude" name="longitudine" type="hidden">
             </label>
+            <div id="report-map-host"></div>
             <label>
-              Categoria
-              <input id="report-category" name="categoria" type="text" readonly>
+              Topic
+              <input id="report-category" name="topic" type="text" readonly required>
             </label>
             <label>
               Descrizione
               <textarea name="descrizione" rows="4" placeholder="Descrivi il problema"></textarea>
             </label>
-            <label>
-              Gravita'
-              <input name="gravita" type="range" min="1" max="5" value="3">
-            </label>
             <div class="button-row">
-              <button class="outline-button" type="button" data-view="home">Annulla</button>
-              <button class="solid-button" type="submit">Invia segnalazione</button>
+              <button class="outline-button" id="report-back-to-topics" type="button">Indietro</button>
+              <button class="solid-button" type="submit">Pubblica</button>
             </div>
           </form>
+
+          <dialog class="severity-dialog" id="severity-dialog" aria-labelledby="severity-title">
+            <form method="dialog" class="wire-form">
+              <h2 id="severity-title">Scegli gravita'</h2>
+              <label class="severity-control">
+                <span id="severity-label">Media</span>
+                <input id="severity-range" name="gravita" type="range" min="1" max="4" value="2" step="1">
+              </label>
+              <div class="button-row">
+                <button class="outline-button" value="cancel" type="submit">Indietro</button>
+                <button class="solid-button" id="confirm-severity" type="button">Pubblica</button>
+              </div>
+            </form>
+          </dialog>
         </section>
 
         <section class="screen auth-screen" id="auth-screen">
@@ -114,42 +129,76 @@
             <button id="register-tab" type="button" data-auth-panel="register">Registrati</button>
           </div>
 
-          <form class="wire-form auth-panel active" id="login-form">
-            <label>
-              Email
-              <input name="email" type="email" autocomplete="email" required>
-            </label>
-            <label>
-              Password
-              <span class="password-field">
-                <input name="password" type="password" autocomplete="current-password" required>
-                <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
-                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
-                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
-              </span>
-            </label>
-            <button class="solid-button full" type="submit">Accedi</button>
-          </form>
+          <div class="auth-panel active" id="login-form">
+            <div class="login-mode-tabs" aria-label="Tipo accesso">
+              <button class="active" type="button" data-login-mode="user">Utente</button>
+              <button type="button" data-login-mode="entity">Ente pubblico</button>
+            </div>
+
+            <form class="wire-form login-mode-panel active" id="user-login-form" data-login-panel="user">
+              <label>
+                Email
+                <input name="email" type="email" autocomplete="email" required>
+              </label>
+              <label>
+                Password
+                <span class="password-field">
+                  <input name="password" type="password" autocomplete="current-password" required>
+                  <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+              <button class="solid-button full" type="submit">Accedi</button>
+            </form>
+
+            <form class="wire-form login-mode-panel" id="entity-login-form" data-login-panel="entity">
+              <label>
+                Denominazione
+                <select name="publicEntityId" id="public-entity-select" required>
+                  <option value="">Caricamento enti...</option>
+                </select>
+              </label>
+              <label>
+                PEC
+                <input name="pec" type="email" autocomplete="email" required>
+              </label>
+              <label>
+                Codice IPA
+                <input name="codiceIpa" type="text" required>
+              </label>
+              <label id="entity-unique-code-row">
+                Codice univoco
+                <input name="codiceUnivoco" type="text">
+              </label>
+              <label>
+                Password
+                <span class="password-field">
+                  <input name="password" type="password" autocomplete="current-password" required>
+                  <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+              <button class="solid-button full" type="submit">Accedi come ente</button>
+            </form>
+          </div>
 
           <form class="wire-form auth-panel" id="register-form">
-            <label>
-              Tipo account
-              <select name="tipoUtente" id="account-type">
-                <option value="Utente Registrato">Utente registrato</option>
-                <option value="Ente Pubblico">Ente pubblico</option>
-              </select>
-            </label>
-
+            <input name="tipoUtente" type="hidden" value="Utente Registrato">
             <div class="registered-fields">
-              <label>Nome <input name="nome" type="text" data-registered-required required></label>
-              <label>Cognome <input name="cognome" type="text"></label>
-              <label>Nome pubblico <input name="nomeUtentePubblico" type="text" data-registered-required required></label>
-              <label>Data di nascita <input name="dataNascita" type="date" data-registered-required required></label>
+              <label>Nome* <input name="nome" type="text" data-registered-required required></label>
+              <label>Cognome* <input name="cognome" type="text" required></label>
+              <label>nickname <input name="nomeUtentePubblico" type="text"></label>
+              <label>Data di nascita (sopra i 14 anni)* <input name="dataNascita" type="date" data-registered-required required></label>
               <label>
-                Sesso
+                Sesso*
                 <select name="sesso">
                   <option value="">Seleziona</option>
                   <option value="Femmina">Femmina</option>
@@ -159,23 +208,16 @@
               <label>Numero di telefono <input name="numeroTelefono" type="tel"></label>
             </div>
 
-            <div class="entity-fields" hidden>
-              <label>Denominazione <input name="denominazione" type="text" data-entity-required></label>
-              <label>PEC <input name="pec" type="email" data-entity-required></label>
-              <label>Codice IPA <input name="codiceIpa" type="text" data-entity-required></label>
-              <label>Codice univoco <input name="codiceUnivoco" type="text" data-entity-required></label>
-            </div>
-
             <label>
-              Codice fiscale
+              Codice fiscale*
               <input name="codiceFiscale" type="text" required>
             </label>
             <label>
-              Email
+              Email*
               <input name="email" type="email" autocomplete="email" required>
             </label>
             <label>
-              Password
+              Password*
               <span class="password-field">
                 <input name="password" type="password" autocomplete="new-password" required>
                 <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
@@ -184,6 +226,16 @@
                     <circle cx="12" cy="12" r="3"></circle>
                   </svg>
                 </button>
+              </span>
+              <span class="password-strength" data-password-strength role="status" aria-live="polite">
+                <span class="strength-icon" aria-hidden="true"></span>
+                <span class="strength-meter" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+                <span class="strength-text">Inserisci una password</span>
               </span>
             </label>
             <label class="check-row">

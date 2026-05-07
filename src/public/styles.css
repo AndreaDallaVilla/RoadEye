@@ -103,6 +103,7 @@ button {
 .category-grid button,
 .drawer nav button,
 .auth-tabs button,
+.login-mode-tabs button,
 .bottom-actions button {
   border: 2px solid var(--line);
   border-radius: 0;
@@ -149,6 +150,8 @@ main {
 }
 
 .search-row {
+  position: relative;
+  z-index: 2;
   display: block;
 }
 
@@ -175,21 +178,42 @@ gmpx-place-picker {
 }
 
 .map-box {
+  isolation: isolate;
   position: relative;
+  z-index: 1;
   height: clamp(250px, 48vh, 420px);
   border: 2px solid var(--line);
   background: var(--soft);
+  caret-color: transparent;
   overflow: hidden;
+  user-select: none;
+}
+
+.map-panel.in-report .chip-row {
+  display: none;
+}
+
+.map-panel.in-report .search-row {
+  display: none;
+}
+
+.map-panel.in-report .map-box {
+  height: clamp(210px, 34vh, 320px);
 }
 
 gmp-map {
+  position: relative;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
+  caret-color: transparent;
+  user-select: none;
 }
 
 .map-status {
   position: absolute;
+  z-index: 2;
   top: 8px;
   right: 8px;
   max-width: 70%;
@@ -212,7 +236,8 @@ gmp-map {
 .news-box,
 .wire-form,
 .category-grid,
-.auth-tabs {
+.auth-tabs,
+.login-mode-tabs {
   margin-top: 12px;
 }
 
@@ -310,6 +335,18 @@ gmp-map {
   gap: 10px;
 }
 
+#report-topic-step .category-grid {
+  margin-top: 0;
+}
+
+#report-topic-step {
+  gap: 12px;
+}
+
+#report-screen:has(#report-topic-step.active) {
+  align-content: start;
+}
+
 .category-grid button {
   display: flex;
   min-height: 50px;
@@ -324,9 +361,66 @@ gmp-map {
   outline: 3px solid var(--focus);
 }
 
+.category-grid button[data-category="Incidente stradale"] {
+  --topic-color: #d93025;
+}
+
+.category-grid button[data-category="Cantiere stradale"] {
+  --topic-color: #f9ab00;
+}
+
+.category-grid button[data-category="Evento"] {
+  --topic-color: #1a73e8;
+}
+
+.category-grid button[data-category="Ferimento animali"] {
+  --topic-color: #8e24aa;
+}
+
+.category-grid button[data-category="Pericolo bordo strada"] {
+  --topic-color: #e8710a;
+}
+
+.category-grid button[data-category="Autovelox"] {
+  --topic-color: #188038;
+}
+
+.category-grid button[data-category] {
+  border-color: var(--topic-color);
+  color: var(--topic-color);
+}
+
+.category-grid button[data-category] span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 2px solid var(--topic-color);
+  background: var(--topic-color);
+  color: var(--paper);
+  font-weight: 900;
+}
+
+.category-grid button[data-category].selected {
+  background: color-mix(in srgb, var(--topic-color) 12%, var(--paper));
+  outline-color: var(--topic-color);
+}
+
+.report-step {
+  display: none;
+}
+
 .wire-form {
   display: grid;
   gap: 10px;
+}
+
+.report-step.active {
+  display: grid;
+}
+
+.wire-form.report-step:not(.active) {
+  display: none;
 }
 
 .wire-form label {
@@ -394,8 +488,122 @@ gmp-map {
   transform: rotate(-38deg);
 }
 
+.password-strength {
+  --strength-color: var(--muted);
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  color: var(--strength-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.strength-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.strength-icon::before {
+  content: "";
+}
+
+.strength-meter {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  min-width: 0;
+}
+
+.strength-meter span {
+  height: 6px;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.password-strength.is-weak {
+  --strength-color: var(--accent);
+}
+
+.password-strength.is-weak .strength-icon::before {
+  content: "🤢";
+}
+
+.password-strength.is-fair {
+  --strength-color: #b06000;
+}
+
+.password-strength.is-fair .strength-icon::before {
+  content: "🥺";
+}
+
+.password-strength.is-good {
+  --strength-color: var(--focus);
+}
+
+.password-strength.is-good .strength-icon::before {
+  content: "😎";
+}
+
+.password-strength.is-strong {
+  --strength-color: var(--ok);
+}
+
+.password-strength.is-strong .strength-icon::before {
+  content: "🤪";
+}
+
+.password-strength.is-weak .strength-meter span:nth-child(-n + 1),
+.password-strength.is-fair .strength-meter span:nth-child(-n + 2),
+.password-strength.is-good .strength-meter span:nth-child(-n + 3),
+.password-strength.is-strong .strength-meter span {
+  background: currentColor;
+}
+
 .wire-form textarea {
   resize: vertical;
+}
+
+.severity-dialog {
+  width: min(92vw, 380px);
+  border: 2px solid var(--line);
+  border-radius: 0;
+  padding: 12px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.severity-dialog::backdrop {
+  background: rgba(20, 20, 20, 0.45);
+}
+
+.severity-control {
+  gap: 10px;
+}
+
+.severity-control span {
+  color: var(--severity-color, #188038);
+  font-size: 1rem;
+}
+
+.severity-control input[type="range"] {
+  --severity-color: #188038;
+  --severity-progress: 33%;
+  padding: 0;
+  accent-color: var(--severity-color);
+  background: linear-gradient(
+    90deg,
+    #188038 0%,
+    var(--severity-color) var(--severity-progress),
+    var(--soft) var(--severity-progress),
+    var(--soft) 100%
+  );
 }
 
 .check-row {
@@ -431,12 +639,20 @@ gmp-map {
   gap: 8px;
 }
 
-.auth-tabs button {
+.login-mode-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-tabs button,
+.login-mode-tabs button {
   min-height: 42px;
   text-transform: uppercase;
 }
 
-.auth-tabs button.active {
+.auth-tabs button.active,
+.login-mode-tabs button.active {
   background: var(--ink);
   color: var(--paper);
 }
@@ -446,6 +662,14 @@ gmp-map {
 }
 
 .auth-panel.active {
+  display: grid;
+}
+
+.login-mode-panel {
+  display: none;
+}
+
+.login-mode-panel.active {
   display: grid;
 }
 

@@ -31,6 +31,10 @@ function ensureCodiceIpa(codiceIpa, identificativo) {
 }
 
 function ensureCodiceUnivoco(codiceUnivoco, identificativo) {
+  if (!codiceUnivoco) {
+    return undefined;
+  }
+
   const normalized = String(codiceUnivoco || "")
     .trim()
     .toUpperCase()
@@ -67,6 +71,8 @@ async function seedEntiPubblici() {
 
     const existing = await PublicEntity.findOne({ email });
     if (existing) {
+      existing.profilo.codiceUnivoco = codiceUnivoco || undefined;
+      await existing.save();
       alreadyExisting += 1;
       continue;
     }
@@ -80,7 +86,7 @@ async function seedEntiPubblici() {
         denominazione: regola.denominazione || identificativo,
         pec,
         codiceIpa,
-        codiceUnivoco,
+        ...(codiceUnivoco ? { codiceUnivoco } : {}),
       });
       created += 1;
       console.log(`[CREATED] ${identificativo} -> ${email}`);
