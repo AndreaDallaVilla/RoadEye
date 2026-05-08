@@ -45,8 +45,18 @@ async function listPublicEntities(_req, res, next) {
   }
 }
 
+function listPhoneCountries(req, res, next) {
+  try {
+    const nazioni = authService.listPhoneCountries(req.query.locale || "it");
+    res.status(200).json({ nazioni });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getCurrentUser,
+  listPhoneCountries,
   listPublicEntities,
   login,
   logout,

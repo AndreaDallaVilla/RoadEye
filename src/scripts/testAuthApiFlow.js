@@ -60,6 +60,14 @@ async function run() {
 
   console.log(`[INFO] Base URL: ${baseUrl}`);
 
+  const phoneCountries = await sendJson("GET", `${baseUrl}/auth/phone-countries?locale=it`);
+  assert.strictEqual(phoneCountries.response.status, 200, "Phone countries deve restituire 200");
+  assert.ok(
+    phoneCountries.data?.nazioni?.some((nazione) => nazione.codice === "IT" && nazione.prefisso === "+39"),
+    "Phone countries deve includere l'Italia con prefisso +39",
+  );
+  console.log("[OK] Phone countries 200");
+
   const registerPayload = {
     tipoUtente: "Utente Registrato",
     email,
@@ -70,6 +78,8 @@ async function run() {
     nomeUtentePubblico,
     dataNascita: "1999-01-01",
     sesso: "Maschio",
+    nazioneTelefono: "IT",
+    numeroTelefono: "3331234567",
     notificheAttive: true,
     localizzazioneAttiva: true,
   };

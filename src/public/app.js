@@ -9,7 +9,6 @@
     "Pericolo bordo strada": "#e8710a",
     Autovelox: "#188038",
   };
-
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
   const placePicker = document.querySelector("gmpx-place-picker");
@@ -563,6 +562,71 @@
     return data;
   }
 
+  function validatePhoneFields(form) {
+    const countryInput = form.querySelector('select[name="nazioneTelefono"]');
+    const phoneInput = form.querySelector('input[name="numeroTelefono"]');
+
+    if (!countryInput || !phoneInput) {
+      return true;
+    }
+
+    const countryCode = countryInput.value;
+    const phoneValue = phoneInput.value.trim();
+
+    countryInput.setCustomValidity("");
+    phoneInput.setCustomValidity("");
+
+    if (!countryCode && !phoneValue) {
+      return true;
+    }
+
+    if (!countryCode) {
+      countryInput.setCustomValidity("Seleziona la nazione del prefisso.");
+      countryInput.reportValidity();
+      return false;
+    }
+
+    if (!/^\+?[\d\s().-]{4,20}$/.test(phoneValue)) {
+      phoneInput.setCustomValidity("Inserisci un numero di telefono valido.");
+      phoneInput.reportValidity();
+      return false;
+    }
+
+    return true;
+  }
+
+  async function loadPhoneCountries() {
+    const select = document.querySelector('select[name="nazioneTelefono"]');
+
+    if (!select) {
+      return;
+    }
+
+    try {
+      const payload = await requestJson("/api/auth/phone-countries?locale=it");
+      const countries = payload.nazioni || [];
+
+      select.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Nazione";
+      select.append(placeholder);
+
+      countries.forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country.codice;
+        option.dataset.prefix = country.prefisso;
+        option.textContent = `${country.bandiera} ${country.nome} ${country.prefisso}`;
+        select.append(option);
+      });
+
+      select.value = "";
+    } catch (_error) {
+      select.innerHTML = '<option value="">Nazioni non disponibili</option>';
+    }
+  }
+
   function updateAuthState(user) {
     if (!user) {
       drawerUser.textContent = "Ciao, visitatore";
@@ -832,6 +896,10 @@
       const indicator = event.currentTarget.querySelector("[data-password-strength]");
       const strength = updatePasswordStrength(passwordInput, indicator);
 
+      if (!validatePhoneFields(event.currentTarget)) {
+        return;
+      }
+
       if (!strength.isValid) {
         setAuthMessage("La password deve avere almeno 10 caratteri, maiuscole, minuscole, numeri e simboli.", "error");
         passwordInput.focus();
@@ -1072,6 +1140,7 @@
     bindForms();
     initPasswordToggles();
     initPasswordStrengthIndicator();
+    loadPhoneCountries();
     refreshCurrentUser();
     initMap();
   });

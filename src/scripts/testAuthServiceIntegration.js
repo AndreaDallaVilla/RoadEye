@@ -42,6 +42,8 @@ async function run() {
       nomeUtentePubblico,
       dataNascita: "1999-01-01",
       sesso: "Maschio",
+      nazioneTelefono: "IT",
+      numeroTelefono: "3331234567",
       notificheAttive: true,
       localizzazioneAttiva: true,
     });
@@ -53,6 +55,16 @@ async function run() {
       registerResult.utente.profilo.nomeUtentePubblico,
       nomeUtentePubblico,
       "Nome utente pubblico non coerente",
+    );
+    assert.strictEqual(
+      registerResult.utente.profilo.numeroTelefono,
+      "+393331234567",
+      "Numero telefono non normalizzato",
+    );
+    assert.strictEqual(
+      registerResult.utente.profilo.prefissoTelefono,
+      "+39",
+      "Prefisso telefono non coerente",
     );
     assert.strictEqual(
       Object.prototype.hasOwnProperty.call(registerResult.utente, "hashPassword"),

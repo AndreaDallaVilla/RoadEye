@@ -21,6 +21,7 @@ const {
   normalizzaCodiceIpa,
   normalizzaCodiceUnivoco,
 } = require("../utils/identificazioneEntePubblico");
+const { PAESI_TELEFONO, PREFISSI_TELEFONO } = require("../utils/telefono");
 
 function haAlmenoQuattordiciAnni(dataNascita) {
   if (!(dataNascita instanceof Date) || Number.isNaN(dataNascita.getTime())) {
@@ -128,6 +129,14 @@ const schemaUtente = new mongoose.Schema(
       numeroTelefono: {
         type: String,
         trim: true,
+      },
+      nazioneTelefono: {
+        type: String,
+        enum: PAESI_TELEFONO,
+      },
+      prefissoTelefono: {
+        type: String,
+        enum: PREFISSI_TELEFONO,
       },
       denominazione: {
         type: String,

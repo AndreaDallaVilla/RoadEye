@@ -8,7 +8,7 @@ info:
 
 servers:
   - url: http://localhost:3001
-    description: Server locale di sviluppo
+    description: Server locale
 
 tags:
   - name: Health
@@ -17,6 +17,8 @@ tags:
     description: Registrazione, login e sessioni utente
   - name: Maps
     description: Servizi di geocodifica e configurazione Google Maps
+  - name: Announcements
+    description: Creazione e lettura degli annunci stradali
 
 paths:
   /health:
@@ -46,7 +48,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegisterUtenteRequest"
+              $ref: "#/components/schemas/RegisterRequest"
             examples:
               utenteRegistrato:
                 summary: Utente registrato
@@ -60,8 +62,21 @@ paths:
                   nomeUtentePubblico: mario.rossi
                   dataNascita: "1990-01-01"
                   sesso: Maschio
-                  numeroTelefono: "+393331234567"
+                  nazioneTelefono: IT
+                  numeroTelefono: "3331234567"
                   localizzazioneAttiva: true
+                  notificheAttive: true
+              entePubblico:
+                summary: Ente pubblico
+                value:
+                  tipoUtente: Ente Pubblico
+                  email: comune@example.it
+                  codiceFiscale: "00123456789"
+                  password: Password123!
+                  denominazione: Comune Test RoadEye
+                  pec: comune@example.pec.it
+                  codiceIpa: C_TEST
+                  codiceUnivoco: ABC123
                   notificheAttive: true
       responses:
         "201":
@@ -96,14 +111,27 @@ paths:
                 value:
                   email: mario.rossi@example.com
                   password: Password123!
-              entePubblico:
+              enteDaLista:
                 summary: Login ente pubblico selezionato dal database
                 value:
                   publicEntityId: 662f9d2a9a59c651d629f121
-                  pec: comune@pec.example.it
-                  codiceIpa: C_1378
-                  codiceUnivoco: KE9B1B
+                  pec: comune@example.pec.it
+                  codiceIpa: C_TEST
+                  codiceUnivoco: ABC123
                   password: Password123!
+              enteConCodici:
+                summary: Login ente pubblico con identificativi
+                value:
+                  codiceFiscale: "00123456789"
+                  codiceIpa: C_TEST
+                  codiceUnivoco: ABC123
+                  password: Password123!
+              conMfa:
+                summary: Login con MFA
+                value:
+                  email: mario.rossi@example.com
+                  password: Password123!
+                  codiceMfa: "000000"
       responses:
         "200":
           description: Login effettuato
@@ -134,6 +162,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PublicEntityListResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/auth/phone-countries:
+    get:
+      tags:
+        - Auth
+      summary: Elenca le nazioni disponibili per i prefissi telefonici
+      operationId: listPhoneCountries
+      security: []
+      parameters:
+        - name: locale
+          in: query
+          description: Locale usato per tradurre i nomi delle nazioni.
+          required: false
+          schema:
+            type: string
+            default: it
+      responses:
+        "200":
+          description: Nazioni disponibili con prefisso e bandierina
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhoneCountryListResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -199,10 +252,16 @@ paths:
         - name: indirizzo
           in: query
           description: Indirizzo da geocodificare. In alternativa e accettato anche il parametro address.
-          required: true
+          required: false
           schema:
             type: string
           example: Piazza Duomo, Trento
+        - name: address
+          in: query
+          description: Alias di indirizzo.
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Risultati di geocodifica
@@ -230,21 +289,45 @@ paths:
         - name: latitudine
           in: query
           description: Latitudine. In alternativa e accettato anche il parametro lat.
-          required: true
+          required: false
           schema:
             type: number
             minimum: -90
             maximum: 90
           example: 46.0667
+        - name: lat
+          in: query
+          description: Alias di latitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
         - name: longitudine
           in: query
           description: Longitudine. In alternativa sono accettati anche i parametri lng o lon.
-          required: true
+          required: false
           schema:
             type: number
             minimum: -180
             maximum: 180
           example: 11.1211
+        - name: lng
+          in: query
+          description: Alias di longitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: lon
+          in: query
+          description: Alias di longitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
       responses:
         "200":
           description: Risultati di geocodifica inversa
@@ -276,9 +359,27 @@ paths:
           schema:
             type: string
           example: Piazza Duomo, Trento
+        - name: indirizzo
+          in: query
+          description: Alias di query.
+          required: false
+          schema:
+            type: string
+        - name: address
+          in: query
+          description: Alias di query.
+          required: false
+          schema:
+            type: string
         - name: placeId
           in: query
           description: Identificativo Google Place. In alternativa e accettato place_id.
+          required: false
+          schema:
+            type: string
+        - name: place_id
+          in: query
+          description: Alias di placeId.
           required: false
           schema:
             type: string
@@ -290,9 +391,33 @@ paths:
             type: number
             minimum: -90
             maximum: 90
+        - name: lat
+          in: query
+          description: Alias di latitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
         - name: longitudine
           in: query
           description: Longitudine da usare se non vengono forniti query o placeId.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: lng
+          in: query
+          description: Alias di longitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: lon
+          in: query
+          description: Alias di longitudine.
           required: false
           schema:
             type: number
@@ -345,6 +470,76 @@ paths:
           $ref: "#/components/responses/ServiceUnavailable"
         "500":
           $ref: "#/components/responses/InternalServerError"
+
+  /api/announcements:
+    post:
+      tags:
+        - Announcements
+      summary: Crea un annuncio stradale
+      operationId: createAnnouncement
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnnouncementRequest"
+            examples:
+              incidente:
+                summary: Incidente con gravita
+                value:
+                  topic: Incidente stradale
+                  descrizione: Tamponamento in carreggiata
+                  gravita: Media
+                  posizione: Via Roma, Trento
+                  coordinate:
+                    latitudine: 46.0667
+                    longitudine: 11.1211
+                  tempoVitaResiduo: 24
+                  interazioneConsentita: Utenti Registrati
+              cantiere:
+                summary: Cantiere senza gravita
+                value:
+                  topic: Cantiere stradale
+                  descrizione: Restringimento corsia
+                  posizione: Rovereto
+                  coordinate:
+                    latitudine: 45.8904
+                    longitudine: 11.0405
+      responses:
+        "201":
+          description: Annuncio creato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnouncementResponse"
+        "400":
+          description: Richiesta non valida o validazione annuncio fallita
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControllerErrorResponse"
+
+  /api/announcements/active:
+    get:
+      tags:
+        - Announcements
+      summary: Elenca gli annunci attivi con coordinate
+      operationId: listActiveAnnouncements
+      security: []
+      responses:
+        "200":
+          description: Annunci attivi ordinati dal piu recente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnouncementListResponse"
+        "400":
+          description: Errore durante il recupero degli annunci
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControllerErrorResponse"
 
 components:
   securitySchemes:
@@ -411,6 +606,16 @@ components:
           type: string
           example: roadeye-api
 
+    RegisterRequest:
+      oneOf:
+        - $ref: "#/components/schemas/RegisterUtenteRequest"
+        - $ref: "#/components/schemas/RegisterEntePubblicoRequest"
+      discriminator:
+        propertyName: tipoUtente
+        mapping:
+          Utente Registrato: "#/components/schemas/RegisterUtenteRequest"
+          Ente Pubblico: "#/components/schemas/RegisterEntePubblicoRequest"
+
     RegisterUtenteRequest:
       type: object
       required:
@@ -436,6 +641,8 @@ components:
         password:
           type: string
           format: password
+          minLength: 10
+          description: Deve rispettare le regole di robustezza lato server.
         nome:
           type: string
         cognome:
@@ -448,6 +655,7 @@ components:
         dataNascita:
           type: string
           format: date
+          description: L'utente deve avere almeno 14 anni.
         sesso:
           type: string
           enum:
@@ -455,6 +663,53 @@ components:
             - Femmina
         numeroTelefono:
           type: string
+          description: Numero nazionale o internazionale coerente con nazioneTelefono.
+        nazioneTelefono:
+          $ref: "#/components/schemas/NazioneTelefono"
+        localizzazioneAttiva:
+          type: boolean
+          default: false
+        notificheAttive:
+          type: boolean
+          default: false
+
+    RegisterEntePubblicoRequest:
+      type: object
+      required:
+        - tipoUtente
+        - email
+        - codiceFiscale
+        - password
+        - denominazione
+        - pec
+        - codiceIpa
+      properties:
+        tipoUtente:
+          type: string
+          enum:
+            - Ente Pubblico
+        email:
+          type: string
+          format: email
+        codiceFiscale:
+          type: string
+          description: Codice fiscale dell'ente.
+        password:
+          type: string
+          format: password
+          minLength: 10
+          description: Deve rispettare le regole di robustezza lato server.
+        denominazione:
+          type: string
+        pec:
+          type: string
+          format: email
+        codiceIpa:
+          type: string
+        codiceUnivoco:
+          type: string
+        categoria:
+          $ref: "#/components/schemas/CategoriaEntePubblico"
         localizzazioneAttiva:
           type: boolean
           default: false
@@ -519,6 +774,39 @@ components:
           example: Comune
         richiedeCodiceUnivoco:
           type: boolean
+
+    PhoneCountryListResponse:
+      type: object
+      required:
+        - nazioni
+      properties:
+        nazioni:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhoneCountry"
+
+    PhoneCountry:
+      type: object
+      required:
+        - codice
+        - nome
+        - prefisso
+        - bandiera
+      properties:
+        codice:
+          type: string
+          minLength: 2
+          maxLength: 2
+          example: IT
+        nome:
+          type: string
+          example: Italia
+        prefisso:
+          type: string
+          example: "+39"
+        bandiera:
+          type: string
+          example: "\U0001F1EE\U0001F1F9"
 
     AuthResponse:
       type: object
@@ -601,6 +889,21 @@ components:
             - Femmina
         numeroTelefono:
           type: string
+          description: Numero salvato in formato internazionale.
+          example: "+393331234567"
+        nazioneTelefono:
+          $ref: "#/components/schemas/NazioneTelefono"
+        prefissoTelefono:
+          type: string
+          enum:
+            - "+39"
+            - "+33"
+            - "+49"
+            - "+34"
+            - "+43"
+            - "+41"
+            - "+44"
+            - "+1"
         denominazione:
           type: string
         pec:
@@ -611,13 +914,23 @@ components:
         codiceUnivoco:
           type: string
         categoria:
-          type: string
-          enum:
-            - Comune
-            - ForzePolizia
-            - PoliziaLocale
-            - VigiliDelfuoco
-            - ServizioDiSoccorso
+          $ref: "#/components/schemas/CategoriaEntePubblico"
+
+    NazioneTelefono:
+      type: string
+      minLength: 2
+      maxLength: 2
+      pattern: "^[A-Z]{2}$"
+      description: Codice ISO 3166-1 alpha-2 usato da libphonenumber-js per validare il prefisso telefonico.
+
+    CategoriaEntePubblico:
+      type: string
+      enum:
+        - Comune
+        - ForzePolizia
+        - PoliziaLocale
+        - VigiliDelfuoco
+        - ServizioDiSoccorso
 
     GeocodingResponse:
       type: object
@@ -704,15 +1017,183 @@ components:
           properties:
             north:
               type: number
+              example: 46.62
             south:
               type: number
+              example: 45.65
             east:
               type: number
+              example: 11.98
             west:
               type: number
+              example: 10.45
         areaLabel:
           type: string
           example: Provincia autonoma di Trento
+
+    CreateAnnouncementRequest:
+      type: object
+      required:
+        - topic
+      properties:
+        descrizione:
+          type: string
+          maxLength: 1000
+        topic:
+          $ref: "#/components/schemas/AnnouncementTopic"
+        gravita:
+          $ref: "#/components/schemas/AnnouncementSeverity"
+        ufficiale:
+          type: boolean
+          default: false
+        posizione:
+          type: string
+        coordinate:
+          $ref: "#/components/schemas/Coordinates"
+        tempoVitaResiduo:
+          type: number
+          minimum: 0
+          default: 24
+        interazioneConsentita:
+          type: string
+          enum:
+            - Utenti Registrati
+            - Enti pubblici
+          default: Utenti Registrati
+      description: gravita e richiesta dal modello per i topic Incidente stradale e Pericolo bordo strada.
+
+    AnnouncementResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Announcement"
+
+    AnnouncementListResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActiveAnnouncement"
+
+    Announcement:
+      type: object
+      required:
+        - _id
+        - idAnnuncio
+        - dataOraPubblicazione
+        - stato
+        - topic
+        - visibilita
+        - interazioneConsentita
+        - tempoVitaResiduo
+        - punteggioFeedback
+      properties:
+        _id:
+          type: string
+        idAnnuncio:
+          type: string
+          pattern: "^[a-z]{2}[0-9]{4}$"
+          example: aa0001
+        descrizione:
+          type: string
+        posizione:
+          type: string
+        coordinate:
+          $ref: "#/components/schemas/Coordinates"
+        dataOraPubblicazione:
+          type: string
+          format: date-time
+        stato:
+          $ref: "#/components/schemas/AnnouncementState"
+        ufficiale:
+          type: boolean
+        topic:
+          $ref: "#/components/schemas/AnnouncementTopic"
+        gravita:
+          $ref: "#/components/schemas/AnnouncementSeverity"
+        visibilita:
+          type: string
+          enum:
+            - Tutti
+            - Nessuno
+        interazioneConsentita:
+          type: string
+          enum:
+            - Utenti Registrati
+            - Enti pubblici
+        tempoVitaResiduo:
+          type: number
+        punteggioFeedback:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ActiveAnnouncement:
+      type: object
+      required:
+        - idAnnuncio
+        - topic
+        - coordinate
+        - dataOraPubblicazione
+      properties:
+        idAnnuncio:
+          type: string
+          example: aa0001
+        descrizione:
+          type: string
+        topic:
+          $ref: "#/components/schemas/AnnouncementTopic"
+        gravita:
+          $ref: "#/components/schemas/AnnouncementSeverity"
+        posizione:
+          type: string
+        coordinate:
+          $ref: "#/components/schemas/Coordinates"
+        dataOraPubblicazione:
+          type: string
+          format: date-time
+
+    AnnouncementTopic:
+      type: string
+      enum:
+        - Incidente stradale
+        - Cantiere stradale
+        - Evento
+        - Ferimento animali
+        - Pericolo bordo strada
+        - Autovelox
+
+    AnnouncementSeverity:
+      type: string
+      enum:
+        - Bassa
+        - Media
+        - Alta
+        - Altissima
+
+    AnnouncementState:
+      type: string
+      enum:
+        - Attivo
+        - Archiviato
+        - Eliminato
 
     ErrorResponse:
       type: object
@@ -725,3 +1206,15 @@ components:
           type: array
           items:
             type: string
+
+    ControllerErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string

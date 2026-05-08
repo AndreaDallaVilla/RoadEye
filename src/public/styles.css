@@ -612,6 +612,12 @@ gmp-map {
   text-transform: none;
 }
 
+.phone-field span {
+  display: grid;
+  grid-template-columns: minmax(124px, 0.48fr) 1fr;
+  gap: 8px;
+}
+
 .check-row input {
   min-height: 18px;
   padding: 0;
