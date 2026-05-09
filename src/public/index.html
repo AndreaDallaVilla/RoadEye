@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" xmlns:href="http://www.w3.org/1999/xhtml">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -153,6 +153,7 @@
                 </span>
               </label>
               <button class="solid-button full" type="submit">Accedi</button>
+              <button class="link-button" type="button" data-auth-panel="forgot-password">Hai dimenticato la password?</button>
             </form>
 
             <form class="wire-form login-mode-panel" id="entity-login-form" data-login-panel="entity">
@@ -197,6 +198,7 @@
               <label>Cognome* <input name="cognome" type="text" required></label>
               <label>nickname <input name="nomeUtentePubblico" type="text"></label>
               <label>Data di nascita (sopra i 14 anni)* <input name="dataNascita" type="date" data-registered-required required></label>
+              <label>Luogo di nascita* <input id="birth-place" name="luogoNascita" type="text" autocomplete="address-level2" placeholder="Cerca comune o citta'" required></label>
               <label>
                 Sesso*
                 <select name="sesso">
@@ -222,7 +224,14 @@
             </label>
             <label>
               Email*
-              <input name="email" type="email" autocomplete="email" required>
+              <span class="input-action-row">
+                <input id="register-email" name="email" type="email" autocomplete="email" required>
+                <button class="outline-button" id="send-email-verification" type="button">Verifica</button>
+              </span>
+            </label>
+            <label id="email-verification-row" hidden>
+              Codice ricevuto via email*
+              <input name="codiceVerificaEmail" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code">
             </label>
             <label>
               Password*
@@ -250,7 +259,45 @@
               <input name="notificheAttive" type="checkbox" checked>
               Notifiche attive
             </label>
+            <label class="check-row">
+              <input name="consensoTrattamentoDati" type="checkbox" required>
+              Accetto il trattamento dei dati personali in linea con<a href="https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679" target="_blank"> GDPR (General Data Protection Regulation - Regolamento UE 2016/679). </a>
+            </label>
             <button class="solid-button full" type="submit">Salva</button>
+          </form>
+
+          <form class="wire-form auth-panel" id="forgot-password-form">
+            <label>
+              Email associata all'account
+              <input name="email" type="email" autocomplete="email" required>
+            </label>
+            <button class="solid-button full" type="submit">Invia codice</button>
+            <button class="link-button" type="button" data-auth-panel="login">Torna all'accesso</button>
+          </form>
+
+          <form class="wire-form auth-panel" id="reset-password-form">
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required>
+            </label>
+            <label>
+              Codice ricevuto via email
+              <input name="codiceReset" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+            </label>
+            <label>
+              Nuova password
+              <span class="password-field">
+                <input name="password" type="password" autocomplete="new-password" required>
+                <button class="password-toggle" type="button" aria-label="Mostra password" aria-pressed="false">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                    <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </span>
+            </label>
+            <button class="solid-button full" type="submit">Aggiorna password</button>
+            <button class="link-button" type="button" data-auth-panel="login">Torna all'accesso</button>
           </form>
 
           <p class="form-message" id="auth-message" role="status"></p>

@@ -106,6 +106,15 @@ const schemaUtente = new mongoose.Schema(
         default: false,
       },
     },
+    consensi: {
+      trattamentoDati: {
+        type: Boolean,
+        default: false,
+      },
+      trattamentoDatiAccettatoIl: {
+        type: Date,
+      },
+    },
     profilo: {
       nome: {
         type: String,
@@ -121,6 +130,10 @@ const schemaUtente = new mongoose.Schema(
       },
       dataNascita: {
         type: Date,
+      },
+      luogoNascita: {
+        type: String,
+        trim: true,
       },
       sesso: {
         type: String,
@@ -220,7 +233,7 @@ schemaUtente.pre("validate", function validaUtente(next) {
     }
 
     if (!this.profilo?.cognome) {
-      this.invalidate("profilo.cognome", "Il cognome e obbligatorio");
+      this.invalidate("profilo.cognome", "Il cognome è obbligatorio");
     }
 
     if (this.profilo?.nomeUtentePubblico && !REGEX_NOME_UTENTE_PUBBLICO.test(this.profilo.nomeUtentePubblico)) {
@@ -237,6 +250,10 @@ schemaUtente.pre("validate", function validaUtente(next) {
         "profilo.dataNascita",
         "L'utente deve avere almeno 14 anni",
       );
+    }
+
+    if (!this.profilo?.luogoNascita) {
+      this.invalidate("profilo.luogoNascita", "Il luogo di nascita è obbligatorio");
     }
   }
 
