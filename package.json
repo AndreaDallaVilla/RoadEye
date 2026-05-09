@@ -24,7 +24,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "mongoose": "^8.23.1",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "nodemailer": "^8.0.7"
   },
   "devDependencies": {
     "jsdoc": "^4.0.5"

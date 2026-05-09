@@ -3,7 +3,7 @@ const authService = require("../services/auth.service");
 async function register(req, res, next) {
   try {
     const result = await authService.registerUser(req.body);
-    res.status(201).json(result);
+    res.status(result.richiedeVerificaEmail ? 202 : 201).json(result);
   } catch (error) {
     next(error);
   }
@@ -12,6 +12,15 @@ async function register(req, res, next) {
 async function login(req, res, next) {
   try {
     const result = await authService.loginUser(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function requestEmailVerification(req, res, next) {
+  try {
+    const result = await authService.requestEmailVerification(req.body);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -36,6 +45,24 @@ async function logout(req, res, next) {
   }
 }
 
+async function requestPasswordReset(req, res, next) {
+  try {
+    const result = await authService.requestPasswordReset(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function resetPassword(req, res, next) {
+  try {
+    const result = await authService.resetPassword(req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function listPublicEntities(_req, res, next) {
   try {
     const enti = await authService.listPublicEntities();
@@ -51,4 +78,7 @@ module.exports = {
   login,
   logout,
   register,
+  requestEmailVerification,
+  requestPasswordReset,
+  resetPassword,
 };

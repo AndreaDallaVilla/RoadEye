@@ -9,6 +9,7 @@
     "Pericolo bordo strada": "#e8710a",
     Autovelox: "#188038",
   };
+  const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
@@ -27,6 +28,7 @@
   const reportLatitude = document.querySelector("#report-latitude");
   const reportLongitude = document.querySelector("#report-longitude");
   const reportCategory = document.querySelector("#report-category");
+  const birthPlace = document.querySelector("#birth-place");
   const severityDialog = document.querySelector("#severity-dialog");
   const severityRange = document.querySelector("#severity-range");
   const severityLabel = document.querySelector("#severity-label");
@@ -39,8 +41,10 @@
   };
 
   const authTitles = {
+    "forgot-password": "Recupera password",
     login: "Accedi",
     register: "Registrati",
+    "reset-password": "Nuova password",
   };
 
   let selectedPlace = null;
@@ -50,9 +54,12 @@
   let currentReportStep = "topic";
   let publicEntities = [];
   let pendingReportForm = null;
+  let pendingRegistrationPayload = null;
+  const otpCooldownTimers = new Map();
   let announcementMarkers = [];
   let selectionInfoWindow = null;
   let reportPositionAutocomplete = null;
+  let birthPlaceAutocomplete = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) {
@@ -267,6 +274,74 @@
     });
   }
 
+  function startOtpCooldown(button, defaultLabel, seconds = OTP_RESEND_COOLDOWN_SECONDS) {
+    if (!button) {
+      return;
+    }
+
+    const existingTimer = otpCooldownTimers.get(button);
+    if (existingTimer) {
+      window.clearInterval(existingTimer);
+    }
+
+    let remainingSeconds = seconds;
+    button.disabled = true;
+    button.textContent = `${defaultLabel} (${remainingSeconds}s)`;
+
+    const timer = window.setInterval(() => {
+      remainingSeconds -= 1;
+
+      if (remainingSeconds <= 0) {
+        window.clearInterval(timer);
+        otpCooldownTimers.delete(button);
+        button.disabled = false;
+        button.textContent = defaultLabel;
+        return;
+      }
+
+      button.textContent = `${defaultLabel} (${remainingSeconds}s)`;
+    }, 1000);
+
+    otpCooldownTimers.set(button, timer);
+  }
+
+  async function setupBirthPlaceAutocomplete() {
+    if (!birthPlace || birthPlaceAutocomplete || typeof google === "undefined") {
+      return;
+    }
+
+    if (!google.maps.places && google.maps.importLibrary) {
+      await google.maps.importLibrary("places");
+    }
+
+    if (!google.maps.places?.Autocomplete) {
+      return;
+    }
+
+    birthPlaceAutocomplete = new google.maps.places.Autocomplete(birthPlace, {
+      componentRestrictions: { country: "it" },
+      fields: ["address_components", "formatted_address", "name"],
+      types: ["(cities)"],
+    });
+
+    birthPlaceAutocomplete.addListener("place_changed", () => {
+      const place = birthPlaceAutocomplete.getPlace();
+      const locality = place.address_components?.find((component) =>
+        component.types.includes("locality"),
+      );
+      const administrativeArea = place.address_components?.find((component) =>
+        component.types.includes("administrative_area_level_3"),
+      );
+
+      birthPlace.value =
+        locality?.long_name ||
+        administrativeArea?.long_name ||
+        place.name ||
+        place.formatted_address ||
+        birthPlace.value;
+    });
+  }
+
   function createApiLoader(config) {
     const loader = document.createElement("gmpx-api-loader");
     loader.setAttribute("key", config.apiKey);
@@ -435,7 +510,7 @@
     });
 
     document.querySelector(`#${panelName}-form`).classList.add("active");
-    document.querySelector(`#${panelName}-tab`).classList.add("active");
+    document.querySelector(`#${panelName}-tab`)?.classList.add("active");
     headerSectionTitle.textContent = authTitles[panelName] || viewTitles.auth;
   }
 
@@ -561,6 +636,70 @@
     });
 
     return data;
+  }
+
+  function toggleRegisterVerificationStep(enabled) {
+    const registerForm = document.querySelector("#register-form");
+    const row = document.querySelector("#email-verification-row");
+    const input = row ? row.querySelector("input") : null;
+    const submit = registerForm ? registerForm.querySelector('button[type="submit"]') : null;
+
+    if (!row || !input || !submit) {
+      return;
+    }
+
+    row.hidden = !enabled;
+    input.required = enabled;
+    submit.textContent = enabled ? "Crea account" : "Salva";
+    if (enabled) {
+      input.focus();
+    } else {
+      input.value = "";
+      pendingRegistrationPayload = null;
+    }
+  }
+
+  async function requestRegisterEmailVerification() {
+    const emailInput = document.querySelector("#register-email");
+    const sendButton = document.querySelector("#send-email-verification");
+    const email = emailInput?.value.trim();
+
+    if (!emailInput || !email) {
+      setAuthMessage("Inserisci prima l'email da verificare", "error");
+      emailInput?.focus();
+      return;
+    }
+
+    if (!emailInput.checkValidity()) {
+      setAuthMessage("Inserisci un'email valida", "error");
+      emailInput.focus();
+      return;
+    }
+
+    toggleRegisterVerificationStep(true);
+    if (sendButton) {
+      sendButton.disabled = true;
+      sendButton.textContent = "Invio...";
+    }
+    setAuthMessage("Invio codice di verifica...");
+
+    try {
+      const payload = await requestJson("/api/auth/email-verification/request", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      pendingRegistrationPayload = null;
+      startOtpCooldown(sendButton, "Verifica");
+      setAuthMessage(payload.message || "Codice inviato", "ok");
+    } catch (error) {
+      toggleRegisterVerificationStep(false);
+      setAuthMessage(error.message, "error");
+    } finally {
+      if (sendButton && !otpCooldownTimers.has(sendButton)) {
+        sendButton.disabled = false;
+        sendButton.textContent = "Verifica";
+      }
+    }
   }
 
   function updateAuthState(user) {
@@ -722,6 +861,12 @@
 
   function bindForms() {
     document.querySelector("#public-entity-select").addEventListener("change", updatePublicEntityUniqueCodeRequirement);
+    document.querySelector("#send-email-verification").addEventListener("click", requestRegisterEmailVerification);
+
+    document.querySelector("#register-email").addEventListener("input", () => {
+      toggleRegisterVerificationStep(false);
+      setAuthMessage("");
+    });
 
     reportPosition.addEventListener("input", () => {
       selectedPlace = null;
@@ -790,12 +935,13 @@
 
     document.querySelector("#user-login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const form = event.currentTarget;
       setAuthMessage("Accesso in corso...");
 
       try {
         const payload = await requestJson("/api/auth/login", {
           method: "POST",
-          body: JSON.stringify(formToObject(event.currentTarget)),
+          body: JSON.stringify(formToObject(form)),
         });
 
         setToken(payload.tokenAccesso);
@@ -809,12 +955,13 @@
 
     document.querySelector("#entity-login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const form = event.currentTarget;
       setAuthMessage("Accesso in corso...");
 
       try {
         const payload = await requestJson("/api/auth/login", {
           method: "POST",
-          body: JSON.stringify(formToObject(event.currentTarget)),
+          body: JSON.stringify(formToObject(form)),
         });
 
         setToken(payload.tokenAccesso);
@@ -828,9 +975,11 @@
 
     document.querySelector("#register-form").addEventListener("submit", async (event) => {
       event.preventDefault();
-      const passwordInput = event.currentTarget.querySelector('input[name="password"]');
-      const indicator = event.currentTarget.querySelector("[data-password-strength]");
+      const form = event.currentTarget;
+      const passwordInput = form.querySelector('input[name="password"]');
+      const indicator = form.querySelector("[data-password-strength]");
       const strength = updatePasswordStrength(passwordInput, indicator);
+      const formPayload = formToObject(form);
 
       if (!strength.isValid) {
         setAuthMessage("La password deve avere almeno 10 caratteri, maiuscole, minuscole, numeri e simboli.", "error");
@@ -838,18 +987,77 @@
         return;
       }
 
-      setAuthMessage("Registrazione in corso...");
+      if (!formPayload.codiceVerificaEmail) {
+        setAuthMessage("Verifica l'email e inserisci il codice ricevuto prima di creare l'account", "error");
+        document.querySelector("#send-email-verification").focus();
+        return;
+      }
+
+      const payload = formPayload;
+
+      setAuthMessage("Creazione account...");
 
       try {
-        const payload = await requestJson("/api/auth/register", {
+        const responsePayload = await requestJson("/api/auth/register", {
           method: "POST",
-          body: JSON.stringify(formToObject(event.currentTarget)),
+          body: JSON.stringify(payload),
         });
 
-        setToken(payload.tokenAccesso);
-        updateAuthState(payload.utente);
+        setToken(responsePayload.tokenAccesso);
+        updateAuthState(responsePayload.utente);
+        toggleRegisterVerificationStep(false);
+        form.reset();
         setAuthMessage("Registrazione completata", "ok");
         showView("home");
+      } catch (error) {
+        setAuthMessage(error.message, "error");
+      }
+    });
+
+    document.querySelector("#forgot-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submitButton = form.querySelector('button[type="submit"]');
+      setAuthMessage("Invio codice di reset...");
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Invio...";
+      }
+
+      try {
+        const payload = formToObject(form);
+        const responsePayload = await requestJson("/api/auth/password-reset/request", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        const resetForm = document.querySelector("#reset-password-form");
+        resetForm.querySelector('input[name="email"]').value = payload.email;
+        startOtpCooldown(submitButton, "Invia codice");
+        showAuth("reset-password");
+        setAuthMessage(responsePayload.message || "Codice inviato", "ok");
+      } catch (error) {
+        setAuthMessage(error.message, "error");
+      } finally {
+        if (submitButton && !otpCooldownTimers.has(submitButton)) {
+          submitButton.disabled = false;
+          submitButton.textContent = "Invia codice";
+        }
+      }
+    });
+
+    document.querySelector("#reset-password-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      setAuthMessage("Aggiornamento password...");
+
+      try {
+        const responsePayload = await requestJson("/api/auth/password-reset/confirm", {
+          method: "POST",
+          body: JSON.stringify(formToObject(form)),
+        });
+        form.reset();
+        showAuth("login");
+        setAuthMessage(responsePayload.message || "Password aggiornata", "ok");
       } catch (error) {
         setAuthMessage(error.message, "error");
       }
@@ -895,6 +1103,7 @@
       const infowindow = new google.maps.InfoWindow();
       selectionInfoWindow = infowindow;
       await setupReportPositionAutocomplete(config, infowindow);
+      await setupBirthPlaceAutocomplete();
 
       map.innerMap.addListener("click", async (event) => {
         const location = event.latLng;

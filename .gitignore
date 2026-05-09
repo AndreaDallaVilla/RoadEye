@@ -22,3 +22,4 @@ temp/
 *.tmp
 *.bak
 *.local
+src/scripts/test*.js
