@@ -201,8 +201,8 @@
               <label>Luogo di nascita* <input id="birth-place" name="luogoNascita" type="text" autocomplete="address-level2" placeholder="Cerca comune o citta'" required></label>
               <label>
                 Sesso*
-                <select name="sesso">
-                  <option value="">Seleziona</option>
+                <select name="sesso" required>
+                  <option value="" selected>Seleziona</option>
                   <option value="Femmina">Femmina</option>
                   <option value="Maschio">Maschio</option>
                 </select>
@@ -259,9 +259,12 @@
               <input name="notificheAttive" type="checkbox" checked>
               Notifiche attive
             </label>
-            <label class="check-row">
+            <label class="check-row gdpr-consent">
               <input name="consensoTrattamentoDati" type="checkbox" required>
-              Accetto il trattamento dei dati personali in linea con<a href="https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679" target="_blank"> GDPR (General Data Protection Regulation - Regolamento UE 2016/679). </a>
+              <span>
+                Accetto il trattamento dei dati personali in linea con
+                <a href="https://eur-lex.europa.eu/legal-content/IT/TXT/?uri=CELEX:32016R0679" target="_blank">GDPR (General Data Protection Regulation - Regolamento UE 2016/679).</a>
+              </span>
             </label>
             <button class="solid-button full" type="submit">Salva</button>
           </form>
@@ -294,6 +297,16 @@
                     <circle cx="12" cy="12" r="3"></circle>
                   </svg>
                 </button>
+              </span>
+              <span class="password-strength" data-password-strength role="status" aria-live="polite">
+                <span class="strength-icon" aria-hidden="true"></span>
+                <span class="strength-meter" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+                <span class="strength-text">Inserisci una password</span>
               </span>
             </label>
             <button class="solid-button full" type="submit">Aggiorna password</button>
