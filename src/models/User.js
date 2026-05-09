@@ -14,7 +14,9 @@ const {
   VALORI_STATI_ACCOUNT,
   VALORI_TIPI_UTENTE,
 } = require("../utils/constants");
-const { isValidCodiceFiscale } = require("../utils/codiceFiscale");
+const {
+  isValidCodiceFiscalePersonaFisica,
+} = require("../utils/codiceFiscale");
 
 const {
   identificaEntePubblico,
@@ -223,8 +225,14 @@ schemaUtente.pre("validate", function validaUtente(next) {
   }
 
   if (this.tipoUtente === TIPI_UTENTE.UTENTE_REGISTRATO) {
-    if (!isValidCodiceFiscale(this.codiceFiscale)) {
-      this.invalidate("codiceFiscale", "Codice fiscale non valido");
+    if (!isValidCodiceFiscalePersonaFisica(this.codiceFiscale, {
+      dataNascita: this.profilo?.dataNascita,
+      sesso: this.profilo?.sesso,
+    })) {
+      this.invalidate(
+        "codiceFiscale",
+        "Codice fiscale non valido o non coerente con data di nascita e sesso",
+      );
     }
 
     // Gli utenti registrati richiedono i dati personali previsti dal deliverable.
