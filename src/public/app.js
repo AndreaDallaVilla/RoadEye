@@ -590,16 +590,17 @@
   }
 
   function initPasswordStrengthIndicator() {
-    const registerForm = document.querySelector("#register-form");
-    const passwordInput = registerForm.querySelector('input[name="password"]');
-    const indicator = registerForm.querySelector("[data-password-strength]");
+    document.querySelectorAll("[data-password-strength]").forEach((indicator) => {
+      const label = indicator.closest("label");
+      const passwordInput = label ? label.querySelector('input[name="password"]') : null;
 
-    if (!passwordInput || !indicator) {
-      return;
-    }
+      if (!passwordInput) {
+        return;
+      }
 
-    updatePasswordStrength(passwordInput, indicator);
-    passwordInput.addEventListener("input", () => updatePasswordStrength(passwordInput, indicator));
+      updatePasswordStrength(passwordInput, indicator);
+      passwordInput.addEventListener("input", () => updatePasswordStrength(passwordInput, indicator));
+    });
   }
 
   async function requestJson(url, options) {
@@ -1117,6 +1118,16 @@
     document.querySelector("#reset-password-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
+      const passwordInput = form.querySelector('input[name="password"]');
+      const indicator = form.querySelector("[data-password-strength]");
+      const strength = updatePasswordStrength(passwordInput, indicator);
+
+      if (!strength.isValid) {
+        setAuthMessage("La password deve avere almeno 10 caratteri, maiuscole, minuscole, numeri e simboli.", "error");
+        passwordInput.focus();
+        return;
+      }
+
       setAuthMessage("Aggiornamento password...");
 
       try {

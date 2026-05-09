@@ -626,6 +626,25 @@ gmp-map {
   white-space: nowrap;
 }
 
+.gdpr-consent {
+  align-items: start;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.gdpr-consent input {
+  margin-top: 2px;
+}
+
+.gdpr-consent span {
+  min-width: 0;
+}
+
+.gdpr-consent a {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
 .phone-field span {
   display: grid;
   grid-template-columns: minmax(124px, 0.48fr) 1fr;
@@ -792,5 +811,22 @@ gmp-map {
   .brand-logo {
     width: clamp(48px, 14vw, 58px);
     height: clamp(48px, 14vw, 58px);
+  }
+
+  .gdpr-consent {
+    font-size: 0.72rem;
+    line-height: 1.3;
+  }
+
+  .password-strength {
+    grid-template-columns: 22px 1fr;
+  }
+
+  .strength-text {
+    grid-column: 2;
+  }
+
+  .input-action-row {
+    grid-template-columns: 1fr;
   }
 }
