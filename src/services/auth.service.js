@@ -20,6 +20,7 @@ const {
   getSessionExpiryDate,
   hashSessionToken,
 } = require("../utils/sessionToken");
+const { costruisciListaPaesiTelefono, normalizzaTelefono } = require("../utils/telefono");
 
 function normalizzaEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -113,6 +114,15 @@ function costruisciProfilo(payload) {
   const tipoUtente = payload.tipoUtente;
 
   if (tipoUtente === TIPI_UTENTE.UTENTE_REGISTRATO) {
+    const telefono = normalizzaTelefono({
+      nazioneTelefono: payload.nazioneTelefono,
+      numeroTelefono: payload.numeroTelefono,
+    });
+
+    if (telefono.errore) {
+      throw createHttpError(400, telefono.errore);
+    }
+
     // Salva solo i campi pertinenti al ruolo selezionato.
     return {
       nome: payload.nome?.trim(),
@@ -120,7 +130,9 @@ function costruisciProfilo(payload) {
       nomeUtentePubblico: payload.nomeUtentePubblico?.trim(),
       dataNascita: payload.dataNascita,
       sesso: payload.sesso,
-      numeroTelefono: payload.numeroTelefono?.trim(),
+      numeroTelefono: telefono.numeroTelefono,
+      nazioneTelefono: telefono.nazioneTelefono,
+      prefissoTelefono: telefono.prefissoTelefono,
     };
   }
 
@@ -342,8 +354,13 @@ async function listPublicEntities() {
   }));
 }
 
+function listPhoneCountries(locale) {
+  return costruisciListaPaesiTelefono(locale);
+}
+
 module.exports = {
   getCurrentUser,
+  listPhoneCountries,
   listPublicEntities,
   loginUser,
   logoutUser,

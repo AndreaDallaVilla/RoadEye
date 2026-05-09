@@ -205,7 +205,15 @@
                   <option value="Maschio">Maschio</option>
                 </select>
               </label>
-              <label>Numero di telefono <input name="numeroTelefono" type="tel"></label>
+              <label class="phone-field">
+                Numero di telefono
+                <span>
+                  <select name="nazioneTelefono" aria-label="Nazione prefisso telefono">
+                    <option value="">Caricamento nazioni...</option>
+                  </select>
+                  <input name="numeroTelefono" type="tel" inputmode="tel" autocomplete="tel" placeholder="Numero">
+                </span>
+              </label>
             </div>
 
             <label>
