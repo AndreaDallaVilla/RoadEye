@@ -13,7 +13,7 @@
 
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
-  const placePicker = document.querySelector("gmpx-place-picker");
+  const mapSearchInput = document.querySelector("#map-search");
   const status = document.querySelector("#maps-status");
   const drawer = document.querySelector("#drawer");
   const drawerUser = document.querySelector("#drawer-user");
@@ -58,6 +58,7 @@
   const otpCooldownTimers = new Map();
   let announcementMarkers = [];
   let selectionInfoWindow = null;
+  let mapSearchAutocomplete = null;
   let reportPositionAutocomplete = null;
   let birthPlaceAutocomplete = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
@@ -93,10 +94,13 @@
   }
 
   function formatCoordinates(location) {
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const normalizedLocation = getPlainLocation(location);
 
-    return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+    if (!normalizedLocation) {
+      return "";
+    }
+
+    return `${normalizedLocation.lat.toFixed(5)}, ${normalizedLocation.lng.toFixed(5)}`;
   }
 
   function getPlainLocation(location) {
@@ -104,8 +108,15 @@
       return null;
     }
 
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const jsonLocation = typeof location.toJSON === "function" ? location.toJSON() : null;
+    const lat =
+      typeof location.lat === "function"
+        ? location.lat()
+        : location.lat ?? location.latitude ?? location.latitudine ?? jsonLocation?.lat ?? jsonLocation?.latitude;
+    const lng =
+      typeof location.lng === "function"
+        ? location.lng()
+        : location.lng ?? location.longitude ?? location.longitudine ?? jsonLocation?.lng ?? jsonLocation?.longitude;
 
     if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
       return null;
@@ -115,6 +126,67 @@
       lat: Number(lat),
       lng: Number(lng),
     };
+  }
+
+  function fitMapToViewport(viewport) {
+    if (!viewport || !map?.innerMap || typeof google === "undefined") {
+      return false;
+    }
+
+    try {
+      if (typeof viewport.getNorthEast === "function" && typeof viewport.getSouthWest === "function") {
+        map.innerMap.fitBounds(viewport);
+        return true;
+      }
+
+      const bounds = new google.maps.LatLngBounds(
+        { lat: viewport.south, lng: viewport.west },
+        { lat: viewport.north, lng: viewport.east },
+      );
+
+      if (!bounds.isEmpty()) {
+        map.innerMap.fitBounds(bounds);
+        return true;
+      }
+    } catch (_error) {
+      return false;
+    }
+
+    return false;
+  }
+
+  function moveMapToLocation(location, viewport, options = {}) {
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation || !map?.innerMap) {
+      return false;
+    }
+
+    if (!options.ignoreViewport && fitMapToViewport(viewport)) {
+      if (options.maxZoom && map.innerMap.getZoom() > options.maxZoom) {
+        map.innerMap.setZoom(options.maxZoom);
+      }
+
+      return true;
+    }
+
+    if (options.exactZoom) {
+      map.innerMap.setZoom(options.exactZoom);
+      map.innerMap.setCenter(normalizedLocation);
+      google.maps.event.addListenerOnce(map.innerMap, "idle", () => {
+        map.innerMap.setCenter(normalizedLocation);
+      });
+      return true;
+    }
+
+    map.innerMap.setZoom(17);
+    map.innerMap.setCenter(normalizedLocation);
+
+    if (options.maxZoom && map.innerMap.getZoom() > options.maxZoom) {
+      map.innerMap.setZoom(options.maxZoom);
+    }
+
+    return true;
   }
 
   function setSelectedLocation(location, address) {
@@ -197,6 +269,94 @@
     };
   }
 
+  async function geocodeTrentinoAddress(address) {
+    const normalizedAddress = typeof address === "string" ? address.trim() : "";
+
+    if (!normalizedAddress) {
+      return null;
+    }
+
+    const addressWithoutProvinceAbbreviation = normalizedAddress
+      .replace(/,\s*tn\b/i, "")
+      .trim();
+    const searchAddress = /trentino|provincia autonoma di trento/i.test(addressWithoutProvinceAbbreviation)
+      ? addressWithoutProvinceAbbreviation
+      : `${addressWithoutProvinceAbbreviation}, Provincia autonoma di Trento, Italia`;
+    const params = new URLSearchParams({
+      area: "trentino",
+      indirizzo: searchAddress,
+    });
+    const payload = await requestJson(`/api/maps/geocode?${params.toString()}`);
+    const resultsInsideBounds = (payload.risultati || []).filter((candidate) =>
+      candidate.coordinate && isInsideBounds({
+        lat: candidate.coordinate.latitudine,
+        lng: candidate.coordinate.longitudine,
+      }),
+    );
+    const result =
+      resultsInsideBounds.find((candidate) =>
+        candidate.tipi?.some((type) => ["locality", "administrative_area_level_3"].includes(type)),
+      ) || resultsInsideBounds[0];
+
+    if (!result?.coordinate) {
+      return null;
+    }
+
+    return {
+      address: getAddressFromGeocodeResult(result),
+      location: {
+        lat: result.coordinate.latitudine,
+        lng: result.coordinate.longitudine,
+      },
+      viewport: result.viewport,
+    };
+  }
+
+  async function resolvePlaceSelection(place, typedText = "") {
+    const searchText = [
+      typedText,
+      place?.name,
+      place?.formatted_address,
+    ].find((value) => typeof value === "string" && value.trim())?.trim() || "";
+    const geocoded = await geocodeTrentinoAddress(searchText).catch(() => null);
+
+    if (geocoded) {
+      return geocoded;
+    }
+
+    if (typedText) {
+      return null;
+    }
+
+    const location = getPlainLocation(place?.location || place?.geometry?.location);
+
+    if (!location) {
+      return null;
+    }
+
+    return {
+      address: searchText || formatCoordinates(location),
+      location,
+      viewport: place?.viewport || place?.geometry?.viewport,
+    };
+  }
+
+  async function searchMapLocation(place, typedText) {
+    setStatus("Ricerca localita...", "ready");
+
+    const resolvedPlace = await resolvePlaceSelection(place, typedText);
+
+    if (!resolvedPlace || !isInsideBounds(resolvedPlace.location)) {
+      setStatus("Luogo non trovato", "error");
+      return;
+    }
+
+    mapSearchInput.value = resolvedPlace.address || typedText || "";
+    moveMapToLocation(resolvedPlace.location, null, { exactZoom: 13, ignoreViewport: true });
+    setStatus("Mappa aggiornata", "ready");
+    selectionInfoWindow?.close();
+  }
+
   function handleReportPlaceSelection(place, infowindow) {
     const location = place.geometry?.location;
 
@@ -224,14 +384,9 @@
     selectedPlace = place;
     setSelectedLocation(location, place.formatted_address || place.name || formatCoordinates(location));
 
-    if (place.geometry.viewport) {
-      map.innerMap.fitBounds(place.geometry.viewport);
-    } else {
-      map.center = location;
-      map.zoom = 17;
-    }
+    moveMapToLocation(location, place.geometry.viewport);
 
-    marker.position = location;
+    marker.position = getPlainLocation(location);
     setStatus("Luogo selezionato", "ready");
 
     infowindow.setContent(
@@ -271,6 +426,45 @@
       }
 
       handleReportPlaceSelection(reportPositionAutocomplete.getPlace(), infowindow);
+    });
+  }
+
+  async function setupMapSearchAutocomplete(config) {
+    if (!mapSearchInput || mapSearchAutocomplete || typeof google === "undefined") {
+      return;
+    }
+
+    if (!google.maps.places && google.maps.importLibrary) {
+      await google.maps.importLibrary("places");
+    }
+
+    if (!google.maps.places?.Autocomplete) {
+      return;
+    }
+
+    const bounds = new google.maps.LatLngBounds(
+      { lat: config.bounds.south, lng: config.bounds.west },
+      { lat: config.bounds.north, lng: config.bounds.east },
+    );
+
+    mapSearchAutocomplete = new google.maps.places.Autocomplete(mapSearchInput, {
+      bounds,
+      componentRestrictions: { country: "it" },
+      fields: ["formatted_address", "geometry", "name", "types"],
+      strictBounds: false,
+    });
+
+    mapSearchAutocomplete.addListener("place_changed", () => {
+      searchMapLocation(mapSearchAutocomplete.getPlace(), mapSearchInput.value);
+    });
+
+    mapSearchInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      event.preventDefault();
+      searchMapLocation(null, mapSearchInput.value);
     });
   }
 
@@ -356,14 +550,17 @@
       return true;
     }
 
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation) {
+      return false;
+    }
 
     return (
-      lat >= allowedBounds.south &&
-      lat <= allowedBounds.north &&
-      lng >= allowedBounds.west &&
-      lng <= allowedBounds.east
+      normalizedLocation.lat >= allowedBounds.south &&
+      normalizedLocation.lat <= allowedBounds.north &&
+      normalizedLocation.lng >= allowedBounds.west &&
+      normalizedLocation.lng <= allowedBounds.east
     );
   }
 
@@ -1155,7 +1352,6 @@
       map.setAttribute("map-id", config.mapId);
 
       await customElements.whenDefined("gmp-map");
-      await customElements.whenDefined("gmpx-place-picker");
       await customElements.whenDefined("gmp-advanced-marker");
 
       map.innerMap.setOptions({
@@ -1182,6 +1378,7 @@
 
       const infowindow = new google.maps.InfoWindow();
       selectionInfoWindow = infowindow;
+      await setupMapSearchAutocomplete(config);
       await setupReportPositionAutocomplete(config, infowindow);
       await setupBirthPlaceAutocomplete();
 
@@ -1226,73 +1423,6 @@
           setSelectedLocation(location, formatCoordinates(location));
           setStatus(error.message, "error");
         }
-      });
-
-      placePicker.addEventListener("gmpx-placechange", () => {
-        const place = placePicker.value;
-
-        if (!place.location) {
-          if (isReportLocationSelectionActive()) {
-            selectedPlace = null;
-            selectedLocation = null;
-            reportPosition.value = "Luogo non trovato";
-            reportLatitude.value = "";
-            reportLongitude.value = "";
-          }
-
-          setStatus("Luogo non trovato", "error");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          return;
-        }
-
-        if (!isInsideBounds(place.location)) {
-          if (isReportLocationSelectionActive()) {
-            selectedPlace = null;
-            selectedLocation = null;
-            reportPosition.value = "Seleziona un luogo in Provincia di Trento";
-            reportLatitude.value = "";
-            reportLongitude.value = "";
-          }
-
-          setStatus("Fuori area Trentino", "error");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          map.innerMap.fitBounds(config.bounds);
-          return;
-        }
-
-        if (!isReportLocationSelectionActive()) {
-          if (place.viewport) {
-            map.innerMap.fitBounds(place.viewport);
-          } else {
-            map.center = place.location;
-            map.zoom = 17;
-          }
-
-          setStatus("Mappa aggiornata", "ready");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          return;
-        }
-
-        selectedPlace = place;
-        setSelectedLocation(place.location, place.formattedAddress || place.displayName || formatCoordinates(place.location));
-
-        if (place.viewport) {
-          map.innerMap.fitBounds(place.viewport);
-        } else {
-          map.center = place.location;
-          map.zoom = 17;
-        }
-
-        marker.position = place.location;
-        setStatus("Luogo selezionato", "ready");
-
-        infowindow.setContent(
-          `<strong>${place.displayName || "Luogo selezionato"}</strong><br><span>${place.formattedAddress || ""}</span>`,
-        );
-        infowindow.open(map.innerMap, marker);
       });
 
       await loadActiveAnnouncements();
