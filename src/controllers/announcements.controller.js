@@ -6,6 +6,7 @@ exports.crea = async (req, res) => {
     try {
 
         const {
+            idUser,
             descrizione,
             topic,
             gravita,
@@ -18,6 +19,7 @@ exports.crea = async (req, res) => {
 
         // crea una singola variabile oggetto
         const datiNuovoAnnuncio = {
+            idUser,
             descrizione,
             topic,
             gravita,

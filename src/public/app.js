@@ -1,7 +1,7 @@
-(function () {
+(function () { 
   const TOKEN_KEY = "roadeye.token";
-  const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"];
-  const TOPIC_MARKER_COLORS = {
+  const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"]; // topic che hanno bisogno di avere la gravità
+  const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica 
     "Incidente stradale": "#d93025",
     "Cantiere stradale": "#f9ab00",
     Evento: "#1a73e8",
@@ -10,6 +10,7 @@
     Autovelox: "#188038",
   };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
 
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
@@ -22,31 +23,32 @@
   const homeMapHost = document.querySelector("#home-map-host");
   const reportMapHost = document.querySelector("#report-map-host");
   const sharedMapPanel = document.querySelector("#shared-map-panel");
-  const reportTopicStep = document.querySelector("#report-topic-step");
-  const reportForm = document.querySelector("#report-form");
-  const reportPosition = document.querySelector("#report-position");
-  const reportLatitude = document.querySelector("#report-latitude");
-  const reportLongitude = document.querySelector("#report-longitude");
-  const reportCategory = document.querySelector("#report-category");
+  const reportTopicStep = document.querySelector("#report-topic-step"); // scegliere il tipo di problema
+  const reportForm = document.querySelector("#report-form"); // modulo intero
+  const reportPosition = document.querySelector("#report-position"); 
+  const reportLatitude = document.querySelector("#report-latitude"); // campo per salvare le coordinate
+  const reportLongitude = document.querySelector("#report-longitude"); // campo per salvare le coordinate
+  const reportCategory = document.querySelector("#report-category");  // scegliere il tipo di problema
   const birthPlace = document.querySelector("#birth-place");
   const severityDialog = document.querySelector("#severity-dialog");
-  const severityRange = document.querySelector("#severity-range");
-  const severityLabel = document.querySelector("#severity-label");
-  const headerSectionTitle = document.querySelector("#header-section-title");
+  const severityRange = document.querySelector("#severity-range"); // gestione della gravità
+  const severityLabel = document.querySelector("#severity-label"); // gestione della gravità
+  const headerSectionTitle = document.querySelector("#header-section-title"); // cambiare il titolo in alto nella pagina dinamicamente
 
-  const viewTitles = {
+  const viewTitles = { // visione di titoli 
     home: "Home",
     report: "Nuova segnalazione",
     auth: "Accedi",
   };
 
-  const authTitles = {
+  const authTitles = { // sezione accedi
     "forgot-password": "Recupera password",
     login: "Accedi",
     register: "Registrati",
     "reset-password": "Nuova password",
   };
 
+  // variabili per la gestione degli annunci 
   let selectedPlace = null;
   let selectedLocation = null;
   let allowedBounds = null;
@@ -63,7 +65,7 @@
   let birthPlaceAutocomplete = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
-  function setStatus(message, state) {
+  function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
     status.textContent = message;
     status.classList.remove("ready", "error");
 
@@ -72,7 +74,7 @@
     }
   }
 
-  function setAuthMessage(message, state) {
+  function setAuthMessage(message, state) { // gestisce i messaggi di errore o successo per l'accesso utente
     authMessage.textContent = message || "";
     authMessage.classList.remove("ok", "error");
 
@@ -103,7 +105,7 @@
     return `${normalizedLocation.lat.toFixed(5)}, ${normalizedLocation.lng.toFixed(5)}`;
   }
 
-  function getPlainLocation(location) {
+  function getPlainLocation(location) { // gestisce le coordinate 
     if (!location) {
       return null;
     }
@@ -202,7 +204,7 @@
     return currentView === "report" && currentReportStep === "details";
   }
 
-  function updateSelectionMarkerVisibility() {
+  function updateSelectionMarkerVisibility() { // gestione dei marker 
     if (!marker) {
       return;
     }
@@ -251,7 +253,7 @@
     return getAddressFromGeocodeResult(payload.risultati?.[0]);
   }
 
-  async function geocodeAddress(address) {
+  async function geocodeAddress(address) { // gestione delle coordinate 
     const params = new URLSearchParams({ indirizzo: address });
     const payload = await requestJson(`/api/maps/geocode?${params.toString()}`);
     const result = payload.risultati?.[0];
@@ -536,7 +538,7 @@
     });
   }
 
-  function createApiLoader(config) {
+  function createApiLoader(config) { // gestione dell'api 
     const loader = document.createElement("gmpx-api-loader");
     loader.setAttribute("key", config.apiKey);
     loader.setAttribute("solution-channel", "GMP_GE_mapsandplacesautocomplete_v2");
@@ -625,11 +627,11 @@
     }, 0);
   }
 
-  function getSelectedSeverity() {
+  function getSelectedSeverity() { // gestione della gravità
     return severityValues[Number(severityRange.value) - 1] || "Media";
   }
 
-  function updateSeveritySlider() {
+  function updateSeveritySlider() { // gestione dello slider della gravità
     const value = Number(severityRange.value);
     const max = Number(severityRange.max);
     const progress = ((value - 1) / (max - 1)) * 100;
@@ -641,7 +643,7 @@
     severityRange.style.setProperty("--severity-progress", `${progress}%`);
   }
 
-  function buildAnnouncementPayload(form, gravita) {
+  function buildAnnouncementPayload(form, gravita) { // creazione dell'annuncio 
     const data = formToObject(form);
     const latitudine = Number(data.latitudine);
     const longitudine = Number(data.longitudine);
@@ -663,7 +665,7 @@
     };
   }
 
-  async function publishAnnouncement(form, gravita) {
+  async function publishAnnouncement(form, gravita) { // pubblicazione dell'annuncio 
     if (!reportLatitude.value || !reportLongitude.value) {
       const typedAddress = reportPosition.value.trim();
       const geocoded = typedAddress ? await geocodeAddress(typedAddress) : null;
@@ -695,7 +697,7 @@
     showView("home");
   }
 
-  function showAuth(panelName) {
+  function showAuth(panelName) { // gestione pagina di autenticazione
     showView("auth");
     setAuthMessage("");
 
@@ -711,7 +713,7 @@
     headerSectionTitle.textContent = authTitles[panelName] || viewTitles.auth;
   }
 
-  function initPasswordToggles() {
+  function initPasswordToggles() { // gestione della password
     document.querySelectorAll(".password-toggle").forEach((button) => {
       const field = button.closest(".password-field");
       const input = field ? field.querySelector("input") : null;
@@ -731,7 +733,7 @@
     });
   }
 
-  function getPasswordStrength(password) {
+  function getPasswordStrength(password) { // gestione della forza della password 
     const checks = [
       password.length >= 10,
       /[0-9]/.test(password),
@@ -772,7 +774,7 @@
     };
   }
 
-  function updatePasswordStrength(input, indicator) {
+  function updatePasswordStrength(input, indicator) { // gestione della forza della password (etichetta)
     const strength = getPasswordStrength(input.value);
     const text = indicator.querySelector(".strength-text");
 
@@ -786,7 +788,7 @@
     return strength;
   }
 
-  function initPasswordStrengthIndicator() {
+  function initPasswordStrengthIndicator() { // gestione della forza della password 
     document.querySelectorAll("[data-password-strength]").forEach((indicator) => {
       const label = indicator.closest("label");
       const passwordInput = label ? label.querySelector('input[name="password"]') : null;
@@ -836,7 +838,7 @@
     return data;
   }
 
-  function validatePhoneFields(form) {
+  function validatePhoneFields(form) { // gestione dei campi inerenti al telefono
     const countryInput = form.querySelector('select[name="nazioneTelefono"]');
     const phoneInput = form.querySelector('input[name="numeroTelefono"]');
 
@@ -869,7 +871,7 @@
     return true;
   }
 
-  async function loadPhoneCountries() {
+  async function loadPhoneCountries() { // gestione del paese di provenienza per la gestione del numero di telefono
     const select = document.querySelector('select[name="nazioneTelefono"]');
 
     if (!select) {
@@ -901,7 +903,7 @@
     }
   }
 
-  function toggleRegisterVerificationStep(enabled) {
+  function toggleRegisterVerificationStep(enabled) { // gestione della registrazione dell'utente
     const registerForm = document.querySelector("#register-form");
     const row = document.querySelector("#email-verification-row");
     const input = row ? row.querySelector("input") : null;
@@ -922,7 +924,7 @@
     }
   }
 
-  async function requestRegisterEmailVerification() {
+  async function requestRegisterEmailVerification() { // gestione della verifica dell'email 
     const emailInput = document.querySelector("#register-email");
     const sendButton = document.querySelector("#send-email-verification");
     const email = emailInput?.value.trim();
@@ -965,7 +967,7 @@
     }
   }
 
-  function updateAuthState(user) {
+  function updateAuthState(user) { // gestione dell'utente 
     if (!user) {
       drawerUser.textContent = "Ciao, visitatore";
       headerAuthButton.textContent = "Accedi";
@@ -997,7 +999,7 @@
     }
   }
 
-  function updatePublicEntityUniqueCodeRequirement() {
+  function updatePublicEntityUniqueCodeRequirement() { // gestione dell'ente pubblico
     const select = document.querySelector("#public-entity-select");
     const row = document.querySelector("#entity-unique-code-row");
     const input = row ? row.querySelector("input") : null;
@@ -1064,7 +1066,7 @@
     }
   }
 
-  function showLoginMode(mode) {
+  function showLoginMode(mode) { // gestione del login
     document.querySelectorAll("[data-login-mode]").forEach((button) => {
       button.classList.toggle("active", button.dataset.loginMode === mode);
     });
@@ -1341,7 +1343,7 @@
     });
   }
 
-  async function initMap() {
+  async function initMap() { // gestione della mappa 
     try {
       const config = await requestJson("/api/maps/client-config");
       allowedBounds = config.bounds;
@@ -1432,14 +1434,14 @@
     }
   }
 
-  function clearAnnouncementMarkers() {
+  function clearAnnouncementMarkers() { // elimina il marker
     announcementMarkers.forEach((announcementMarker) => {
       announcementMarker.map = null;
     });
     announcementMarkers = [];
   }
 
-  function createAnnouncementMarker(announcement) {
+  function createAnnouncementMarker(announcement) { // crea il marker
     const position = {
       lat: announcement.coordinate.latitudine,
       lng: announcement.coordinate.longitudine,
@@ -1486,6 +1488,58 @@
     updateAnnouncementMarkersVisibility();
   }
 
+  // inserimento degli annunci nella loro sezione 
+  function sezioneAnnunci(announcement) {
+    const container = document.querySelector('.lista-annunci');
+    if (!container) return;
+
+    const content = [
+      `<strong>${announcement.topic}</strong>`,
+      announcement.idUser ? `<span>${announcement.idUser}</span` : "?",
+      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
+      announcement.gravita ? `<span>${announcement.gravita}</span>` : "",
+      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
+    ].filter(Boolean).join("<br>");
+
+    const div = document.createElement('div');
+    div.className = 'annuncio-news';
+
+    const color = (typeof TOPIC_MARKER_COLORS !== 'undefined') ? TOPIC_MARKER_COLORS[announcement.topic] : "#141414";
+    div.style.borderLeft = `5px solid ${color}`;
+    div.innerHTML = content;
+
+    container.appendChild(div);
+  }
+
+  // 2. Questa funzione si occupa solo di SCARICARE i dati e pulire la lista
+  async function aggiornaListaTestualeAnnunci() {
+    const container = document.querySelector('.lista-annunci');
+    if (!container) return;
+
+    try {
+      const response = await fetch('/api/announcements/active');
+      if (!response.ok) throw new Error(`Errore server: ${response.status}`);
+
+      const payload = await response.json();
+      const annunciArray = payload.data || [];
+
+      container.innerHTML = ''; // Svuota la lista prima di riempirla
+
+      if (annunciArray.length === 0) {
+        container.innerHTML = '<p>Nessun annuncio attivo al momento.</p>';
+        return;
+      }
+
+      // CHIAMATA ALLA FUNZIONE SOPRA
+      annunciArray.forEach(announcement => sezioneAnnunci(announcement));
+
+    } catch (error) {
+      console.error("Errore:", error);
+      container.innerHTML = '<p style="color: red;">Impossibile caricare le notizie.</p>';
+    }
+  }
+
+
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
     bindForms();
@@ -1494,5 +1548,6 @@
     loadPhoneCountries();
     refreshCurrentUser();
     initMap();
+    aggiornaListaTestualeAnnunci();
   });
 })();

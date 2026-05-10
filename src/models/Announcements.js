@@ -4,15 +4,20 @@ const mongoose = require("mongoose");
 
 const STATI_ANNUNCIO = ["Attivo", "Archiviato", "Eliminato"];
 const TOPIC = ["Incidente stradale","Cantiere stradale", "Evento", "Ferimento animali", "Pericolo bordo strada", "Autovelox"];
-const GRAVITA = ["Bassa", "Media", "Alta", "Altissima"];;
+const GRAVITA = ["Bassa", "Media", "Alta", "Massima"];;
 const VISIBILITA_ANNUNCIO = ["Tutti", "Nessuno"]; 
-const INTERAZIONE_CONSENTITA = ["Utenti Registrati", "Enti pubblici"];
+const INTERAZIONE_CONSENTITA = ["Tutti", "Utenti Registrati", "Ente emittente", "Centrale operativa"];
 
 const annuncioSchema = new mongoose.Schema({
     idAnnuncio: { 
         type: String,
         required: true,
         unique: true,
+        trim: true
+    },
+    idUser: {
+        type: String,
+        required: true,
         trim: true
     },
     descrizione: {
@@ -43,13 +48,16 @@ const annuncioSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
-    stato: { // ?? 
+    stato: {  
         type: String,
         enum: STATI_ANNUNCIO,
         default: "Attivo",
     },
-    ufficiale: { // ??
-        // ...
+    ufficiale: { 
+        // 0: segnalazione fatta da utente 
+        // 1: segnalazione fatta dalle forze dell'ordine
+        type: Boolean,
+        default: 0
     },
     topic: {
         type: String,
