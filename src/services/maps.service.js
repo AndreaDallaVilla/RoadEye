@@ -12,13 +12,26 @@ const TRENTINO_BOUNDS = Object.freeze({
   west: 10.45,
 });
 
-function getGoogleMapsApiKey() {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+function getGoogleMapsServerApiKey() {
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY?.trim() || process.env.GOOGLE_MAPS_API_KEY?.trim();
 
   if (!apiKey) {
     throw createHttpError(
       503,
-      "Google Maps API non configurata: imposta GOOGLE_MAPS_API_KEY nel file .env",
+      "Google Maps API non configurata: imposta GOOGLE_MAPS_SERVER_API_KEY nel file .env",
+    );
+  }
+
+  return apiKey;
+}
+
+function getGoogleMapsBrowserApiKey() {
+  const apiKey = process.env.GOOGLE_MAPS_BROWSER_API_KEY?.trim() || process.env.GOOGLE_MAPS_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw createHttpError(
+      503,
+      "Google Maps API non configurata: imposta GOOGLE_MAPS_BROWSER_API_KEY nel file .env",
     );
   }
 
@@ -64,7 +77,7 @@ function sanitizzaRisultatoGeocoding(result) {
 }
 
 async function chiamaGeocodingApi(params) {
-  const apiKey = getGoogleMapsApiKey();
+  const apiKey = getGoogleMapsServerApiKey();
   const url = new URL(GEOCODING_BASE_URL);
 
   url.searchParams.set("key", apiKey);
@@ -138,7 +151,7 @@ async function geocodificaInversa(payload) {
 }
 
 function creaEmbedUrl(payload) {
-  const apiKey = getGoogleMapsApiKey();
+  const apiKey = getGoogleMapsServerApiKey();
   const query = normalizzaTesto(payload.query || payload.indirizzo || payload.address);
   const placeId = normalizzaTesto(payload.placeId || payload.place_id);
   const latitudine = payload.latitudine ?? payload.lat;
@@ -177,7 +190,7 @@ function creaEmbedUrl(payload) {
 
 function creaConfigurazioneClient() {
   return {
-    apiKey: getGoogleMapsApiKey(),
+    apiKey: getGoogleMapsBrowserApiKey(),
     language: DEFAULT_LANGUAGE,
     region: DEFAULT_REGION,
     mapId: DEFAULT_MAP_ID,

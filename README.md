@@ -23,7 +23,8 @@
 Add a Google Maps Platform key to `.env`:
 
 ```env
-GOOGLE_MAPS_API_KEY=<google-maps-api-key>
+GOOGLE_MAPS_BROWSER_API_KEY=<google-maps-browser-api-key>
+GOOGLE_MAPS_SERVER_API_KEY=<google-maps-server-api-key>
 GOOGLE_MAPS_LANGUAGE=it
 GOOGLE_MAPS_REGION=it
 ```
