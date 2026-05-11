@@ -14,13 +14,16 @@ const {
   VALORI_STATI_ACCOUNT,
   VALORI_TIPI_UTENTE,
 } = require("../utils/constants");
-const { isValidCodiceFiscale } = require("../utils/codiceFiscale");
+const {
+  isValidCodiceFiscalePersonaFisica,
+} = require("../utils/codiceFiscale");
 
 const {
   identificaEntePubblico,
   normalizzaCodiceIpa,
   normalizzaCodiceUnivoco,
 } = require("../utils/identificazioneEntePubblico");
+const { PAESI_TELEFONO, PREFISSI_TELEFONO } = require("../utils/telefono");
 
 function haAlmenoQuattordiciAnni(dataNascita) {
   if (!(dataNascita instanceof Date) || Number.isNaN(dataNascita.getTime())) {
@@ -105,6 +108,15 @@ const schemaUtente = new mongoose.Schema(
         default: false,
       },
     },
+    consensi: {
+      trattamentoDati: {
+        type: Boolean,
+        default: false,
+      },
+      trattamentoDatiAccettatoIl: {
+        type: Date,
+      },
+    },
     profilo: {
       nome: {
         type: String,
@@ -121,6 +133,10 @@ const schemaUtente = new mongoose.Schema(
       dataNascita: {
         type: Date,
       },
+      luogoNascita: {
+        type: String,
+        trim: true,
+      },
       sesso: {
         type: String,
         enum: VALORI_SESSI,
@@ -128,6 +144,14 @@ const schemaUtente = new mongoose.Schema(
       numeroTelefono: {
         type: String,
         trim: true,
+      },
+      nazioneTelefono: {
+        type: String,
+        enum: PAESI_TELEFONO,
+      },
+      prefissoTelefono: {
+        type: String,
+        enum: PREFISSI_TELEFONO,
       },
       denominazione: {
         type: String,
@@ -201,8 +225,14 @@ schemaUtente.pre("validate", function validaUtente(next) {
   }
 
   if (this.tipoUtente === TIPI_UTENTE.UTENTE_REGISTRATO) {
-    if (!isValidCodiceFiscale(this.codiceFiscale)) {
-      this.invalidate("codiceFiscale", "Codice fiscale non valido");
+    if (!isValidCodiceFiscalePersonaFisica(this.codiceFiscale, {
+      dataNascita: this.profilo?.dataNascita,
+      sesso: this.profilo?.sesso,
+    })) {
+      this.invalidate(
+        "codiceFiscale",
+        "Codice fiscale non valido o non coerente con data di nascita e sesso",
+      );
     }
 
     // Gli utenti registrati richiedono i dati personali previsti dal deliverable.
@@ -210,12 +240,11 @@ schemaUtente.pre("validate", function validaUtente(next) {
       this.invalidate("profilo.nome", "Il nome è obbligatorio");
     }
 
-    if (!this.profilo?.nomeUtentePubblico) {
-      this.invalidate(
-        "profilo.nomeUtentePubblico",
-        "Il nome utente pubblico è obbligatorio per gli utenti registrati",
-      );
-    } else if (!REGEX_NOME_UTENTE_PUBBLICO.test(this.profilo.nomeUtentePubblico)) {
+    if (!this.profilo?.cognome) {
+      this.invalidate("profilo.cognome", "Il cognome è obbligatorio");
+    }
+
+    if (this.profilo?.nomeUtentePubblico && !REGEX_NOME_UTENTE_PUBBLICO.test(this.profilo.nomeUtentePubblico)) {
       this.invalidate(
         "profilo.nomeUtentePubblico",
         "Il nome utente pubblico deve contenere da 3 a 30 caratteri e usare solo lettere, numeri, '.', '_' o '-'",
@@ -229,6 +258,10 @@ schemaUtente.pre("validate", function validaUtente(next) {
         "profilo.dataNascita",
         "L'utente deve avere almeno 14 anni",
       );
+    }
+
+    if (!this.profilo?.luogoNascita) {
+      this.invalidate("profilo.luogoNascita", "Il luogo di nascita è obbligatorio");
     }
   }
 
@@ -268,12 +301,7 @@ schemaUtente.pre("validate", function validaUtente(next) {
       this.invalidate("profilo.codiceIpa", "Formato del codice IPA non valido");
     }
 
-    if (!this.profilo?.codiceUnivoco) {
-      this.invalidate(
-        "profilo.codiceUnivoco",
-        "Il codice univoco è obbligatorio per gli enti pubblici",
-      );
-    } else if (!REGEX_CODICE_UNIVOCO.test(this.profilo.codiceUnivoco)) {
+    if (this.profilo?.codiceUnivoco && !REGEX_CODICE_UNIVOCO.test(this.profilo.codiceUnivoco)) {
       this.invalidate(
         "profilo.codiceUnivoco",
         "Formato del codice univoco non valido",

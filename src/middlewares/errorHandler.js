@@ -1,3 +1,4 @@
+//Gestisce gli errori lanciati
 function errorHandler(error, _req, res, _next) {
   const duplicatedFieldLabels = {
     email: "Email",
@@ -15,7 +16,7 @@ function errorHandler(error, _req, res, _next) {
     const duplicatedFieldLabel = duplicatedFieldLabels[duplicatedField] || duplicatedField;
     message = duplicatedField
       ? `${duplicatedFieldLabel} già in uso`
-      : "Uno dei campi univoci e già in uso";
+      : "Uno dei campi univoci è già in uso";
   }
 
   if (error?.name === "ValidationError") {

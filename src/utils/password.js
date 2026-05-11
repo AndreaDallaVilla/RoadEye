@@ -69,7 +69,7 @@ async function hashPassword(password) {
   const salt = crypto.randomBytes(PASSWORD_SALT_LENGTH).toString("hex");
   const derivedKey = await scrypt(password, salt, PASSWORD_KEY_LENGTH);
 
-  return `${salt}:${derivedKey.toString("hex")}`;
+  return `${salt}:${derivedKey.toString("hex")}`; //valore salvato
 }
 
 async function verifyPassword(password, storedHash) {
@@ -91,7 +91,7 @@ async function verifyPassword(password, storedHash) {
     return false;
   }
 
-  return crypto.timingSafeEqual(originalBuffer, derivedKey);
+  return crypto.timingSafeEqual(originalBuffer, derivedKey); // Confronta due Buffer in modo costante nel tempo per evitare attacchi basati sul tempo di risposta che rivelerebbero byte corretti dell'hash
 }
 
 module.exports = {

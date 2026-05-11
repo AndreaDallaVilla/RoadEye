@@ -1,5 +1,31 @@
 const CF16_REGEX = /^[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]$/;
 const CF11_REGEX = /^[0-9]{11}$/;
+const MONTH_CODES = Object.freeze({
+  A: 1,
+  B: 2,
+  C: 3,
+  D: 4,
+  E: 5,
+  H: 6,
+  L: 7,
+  M: 8,
+  P: 9,
+  R: 10,
+  S: 11,
+  T: 12,
+});
+const OMOCODIA_VALUES = Object.freeze({
+  L: "0",
+  M: "1",
+  N: "2",
+  P: "3",
+  Q: "4",
+  R: "5",
+  S: "6",
+  T: "7",
+  U: "8",
+  V: "9",
+});
 
 const ODD_VALUES = Object.freeze({
   0: 1,
@@ -83,6 +109,84 @@ function normalizzaCodiceFiscale(value) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
 }
 
+function normalizzaSesso(value) {
+  const sesso = typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  if (["m", "maschio", "uomo"].includes(sesso)) {
+    return "M";
+  }
+
+  if (["f", "femmina", "donna"].includes(sesso)) {
+    return "F";
+  }
+
+  return "";
+}
+
+function decodificaCifraOmocodia(value) {
+  return OMOCODIA_VALUES[value] || value;
+}
+
+function decodificaParteNumerica(value) {
+  return value.split("").map(decodificaCifraOmocodia).join("");
+}
+
+function isRealDate(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function getCenturyYear(twoDigitYear, referenceDate = new Date()) {
+  const currentYear = referenceDate.getFullYear();
+  const currentCentury = Math.floor(currentYear / 100) * 100;
+  const candidateCurrentCentury = currentCentury + twoDigitYear;
+
+  if (candidateCurrentCentury > currentYear) {
+    return candidateCurrentCentury - 100;
+  }
+
+  return candidateCurrentCentury;
+}
+
+function parseCf16Anagrafica(codiceFiscale) {
+  const yearPart = decodificaParteNumerica(codiceFiscale.slice(6, 8));
+  const month = MONTH_CODES[codiceFiscale[8]];
+  const dayGenderPart = decodificaParteNumerica(codiceFiscale.slice(9, 11));
+  const birthplaceCode = `${codiceFiscale[11]}${decodificaParteNumerica(codiceFiscale.slice(12, 15))}`;
+
+  if (!/^[0-9]{2}$/.test(yearPart) || !month || !/^[0-9]{2}$/.test(dayGenderPart)) {
+    return null;
+  }
+
+  const dayGender = Number(dayGenderPart);
+  const sesso = dayGender > 40 ? "F" : "M";
+  const day = sesso === "F" ? dayGender - 40 : dayGender;
+  const annoDueCifre = Number(yearPart);
+  const year = getCenturyYear(annoDueCifre);
+
+  if (day < 1 || day > 31 || !isRealDate(year, month, day)) {
+    return null;
+  }
+
+  if (!/^[A-Z][0-9]{3}$/.test(birthplaceCode)) {
+    return null;
+  }
+
+  return {
+    anno: year,
+    annoDueCifre,
+    mese: month,
+    giorno: day,
+    sesso,
+    codiceCatastale: birthplaceCode,
+  };
+}
+
 function calcolaCheckCharCf16(cf16Parziale) {
   let sum = 0;
 
@@ -103,6 +207,39 @@ function isValidCf16(codiceFiscale) {
   const partial = codiceFiscale.slice(0, 15);
   const checkChar = codiceFiscale[15];
   return calcolaCheckCharCf16(partial) === checkChar;
+}
+
+function isValidCodiceFiscalePersonaFisica(value, datiAnagrafici = {}) {
+  const codiceFiscale = normalizzaCodiceFiscale(value);
+
+  if (!isValidCf16(codiceFiscale)) {
+    return false;
+  }
+
+  const datiCf = parseCf16Anagrafica(codiceFiscale);
+  if (!datiCf) {
+    return false;
+  }
+
+  if (datiAnagrafici.dataNascita) {
+    const dataNascita = new Date(datiAnagrafici.dataNascita);
+
+    if (
+      Number.isNaN(dataNascita.getTime()) ||
+      dataNascita.getUTCFullYear() % 100 !== datiCf.annoDueCifre ||
+      dataNascita.getUTCMonth() + 1 !== datiCf.mese ||
+      dataNascita.getUTCDate() !== datiCf.giorno
+    ) {
+      return false;
+    }
+  }
+
+  const sesso = normalizzaSesso(datiAnagrafici.sesso);
+  if (sesso && sesso !== datiCf.sesso) {
+    return false;
+  }
+
+  return true;
 }
 
 function isValidCf11(codiceFiscale) {
@@ -143,6 +280,9 @@ function isValidCodiceFiscale(value) {
 }
 
 module.exports = {
+  isValidCf11,
+  isValidCf16,
   isValidCodiceFiscale,
+  isValidCodiceFiscalePersonaFisica,
   normalizzaCodiceFiscale,
 };

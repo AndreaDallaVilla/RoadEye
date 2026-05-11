@@ -1,5 +1,7 @@
 const User = require("../models/User");
 const PublicEntity = require("../models/PublicEntity");
+const EmailOtp = require("../models/EmailOtp");
+const emailService = require("./email.service");
 
 const {
   STATI_ACCOUNT,
@@ -20,6 +22,19 @@ const {
   getSessionExpiryDate,
   hashSessionToken,
 } = require("../utils/sessionToken");
+const { costruisciListaPaesiTelefono, normalizzaTelefono } = require("../utils/telefono");
+const {
+  OTP_MAX_ATTEMPTS,
+  createOtpCode,
+  getOtpExpiryDate,
+  hashOtpCode,
+} = require("../utils/emailOtp");
+
+const OTP_PURPOSES = Object.freeze({
+  EMAIL_VERIFICATION: "email-verification",
+  PASSWORD_RESET: "password-reset",
+});
+const OTP_RESEND_COOLDOWN_SECONDS = Number(process.env.AUTH_OTP_RESEND_COOLDOWN_SECONDS || 60);
 
 function normalizzaEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -31,6 +46,10 @@ function getCodiciEnteDaPayload(payload) {
     codiceIpa: normalizzaCodiceIpa(payload.codiceIpa),
     codiceUnivoco: normalizzaCodiceUnivoco(payload.codiceUnivoco),
   };
+}
+
+function normalizzaValoreTesto(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function validaCodiceMfa(codiceMfa) {
@@ -50,6 +69,33 @@ async function trovaUtentePerEmail(email) {
 async function trovaUtentePerLogin(payload) {
   const email = normalizzaEmail(payload.email);
   const codiciEnte = getCodiciEnteDaPayload(payload);
+
+  if (payload.publicEntityId) {
+    const ente = await PublicEntity.findById(payload.publicEntityId).select("+hashPassword +sessioni");
+
+    if (!ente) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    const pec = normalizzaEmail(payload.pec);
+    const codiceIpa = normalizzaCodiceIpa(payload.codiceIpa);
+    const codiceUnivoco = normalizzaCodiceUnivoco(payload.codiceUnivoco);
+    const codiceUnivocoAtteso = normalizzaCodiceUnivoco(ente.profilo?.codiceUnivoco);
+
+    if (!pec || pec !== normalizzaEmail(ente.profilo?.pec)) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    if (!codiceIpa || codiceIpa !== normalizzaCodiceIpa(ente.profilo?.codiceIpa)) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    if (codiceUnivocoAtteso && codiceUnivoco !== codiceUnivocoAtteso) {
+      throw createHttpError(401, "Credenziali ente non valide");
+    }
+
+    return ente;
+  }
 
   if (email) {
     return trovaUtentePerEmail(email);
@@ -82,14 +128,26 @@ function costruisciProfilo(payload) {
   const tipoUtente = payload.tipoUtente;
 
   if (tipoUtente === TIPI_UTENTE.UTENTE_REGISTRATO) {
+    const telefono = normalizzaTelefono({
+      nazioneTelefono: payload.nazioneTelefono,
+      numeroTelefono: payload.numeroTelefono,
+    });
+
+    if (telefono.errore) {
+      throw createHttpError(400, telefono.errore);
+    }
+
     // Salva solo i campi pertinenti al ruolo selezionato.
     return {
       nome: payload.nome?.trim(),
       cognome: payload.cognome?.trim(),
       nomeUtentePubblico: payload.nomeUtentePubblico?.trim(),
       dataNascita: payload.dataNascita,
+      luogoNascita: payload.luogoNascita?.trim(),
       sesso: payload.sesso,
-      numeroTelefono: payload.numeroTelefono?.trim(),
+      numeroTelefono: telefono.numeroTelefono,
+      nazioneTelefono: telefono.nazioneTelefono,
+      prefissoTelefono: telefono.prefissoTelefono,
     };
   }
 
@@ -108,6 +166,88 @@ function costruisciProfilo(payload) {
 
 function sanitizzaUtente(utente) {
   return utente.toJSON();
+}
+
+async function creaOtpEmail(email, purpose) {
+  const existingOtp = await EmailOtp.findOne({ email, purpose }).sort({ createdAt: -1 });
+
+  if (existingOtp) {
+    const elapsedSeconds = Math.floor((Date.now() - existingOtp.createdAt.getTime()) / 1000);
+    const remainingSeconds = OTP_RESEND_COOLDOWN_SECONDS - elapsedSeconds;
+
+    if (remainingSeconds > 0) {
+      throw createHttpError(
+        429,
+        `Attendi ${remainingSeconds} secondi prima di richiedere un nuovo codice`,
+      );
+    }
+  }
+
+  const code = createOtpCode();
+
+  await EmailOtp.deleteMany({ email, purpose });
+  await EmailOtp.create({
+    email,
+    purpose,
+    codeHash: hashOtpCode(email, purpose, code),
+    expiresAt: getOtpExpiryDate(),
+  });
+
+  if (purpose === OTP_PURPOSES.PASSWORD_RESET) {
+    await emailService.sendPasswordResetCode(email, code);
+    return;
+  }
+
+  await emailService.sendEmailVerificationCode(email, code);
+}
+
+async function requestEmailVerification(payload) {
+  const email = normalizzaEmail(payload.email);
+
+  if (!email) {
+    throw createHttpError(400, "L'email Ã¨ obbligatoria");
+  }
+
+  const utenteConEmail =
+    (await User.findOne({ email })) || (await PublicEntity.findOne({ email }));
+  if (utenteConEmail) {
+    throw createHttpError(409, "Email giÃ  in uso");
+  }
+
+  await creaOtpEmail(email, OTP_PURPOSES.EMAIL_VERIFICATION);
+
+  return {
+    message: "Codice di verifica inviato all'email indicata",
+  };
+}
+
+async function verificaOtpEmail(email, purpose, code) {
+  const codice = typeof code === "string" ? code.trim() : "";
+
+  if (!/^[0-9]{6}$/.test(codice)) {
+    throw createHttpError(400, "Codice monouso non valido");
+  }
+
+  const otp = await EmailOtp.findOne({ email, purpose }).select("+codeHash");
+
+  if (!otp || otp.expiresAt.getTime() <= Date.now()) {
+    throw createHttpError(400, "Codice monouso scaduto o non richiesto");
+  }
+
+  if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+    await EmailOtp.deleteOne({ _id: otp._id });
+    throw createHttpError(429, "Troppi tentativi: richiedi un nuovo codice");
+  }
+
+  if (otp.codeHash !== hashOtpCode(email, purpose, codice)) {
+    otp.attempts += 1;
+    await otp.save();
+    throw createHttpError(400, "Codice monouso errato");
+  }
+
+  otp.verifiedAt = new Date();
+  await otp.save();
+  return otp;
 }
 
 async function verificaCampiUnivoci({
@@ -172,7 +312,7 @@ async function creaSessioneUtente(utente) {
     scadeIl,
   });
 
-  await utente.save();
+  await utente.save({ validateBeforeSave: false });
 
   return tokenAccesso;
 }
@@ -185,6 +325,7 @@ async function registerUser(payload) {
   const codiceUnivoco = normalizzaCodiceUnivoco(payload.codiceUnivoco);
   const password = payload.password;
   const nomeUtentePubblico = payload.nomeUtentePubblico?.trim();
+  const consensoTrattamentoDati = payload.consensoTrattamentoDati === true;
 
   if (!tipoUtente) {
     throw createHttpError(400, "Il tipo utente è obbligatorio");
@@ -203,6 +344,11 @@ async function registerUser(payload) {
   }
 
   assertStrongPassword(password);
+
+  if (tipoUtente === TIPI_UTENTE.UTENTE_REGISTRATO && !consensoTrattamentoDati) {
+    throw createHttpError(400, "Per registrarti devi accettare il trattamento dei dati personali");
+  }
+
   await verificaCampiUnivoci({
     email,
     codiceFiscale,
@@ -211,6 +357,21 @@ async function registerUser(payload) {
     codiceIpa,
     codiceUnivoco,
   });
+
+  let otpVerificaEmail = null;
+  if (!payload.codiceVerificaEmail) {
+    await creaOtpEmail(email, OTP_PURPOSES.EMAIL_VERIFICATION);
+    return {
+      richiedeVerificaEmail: true,
+      message: "Codice di verifica inviato all'email indicata",
+    };
+  }
+
+  otpVerificaEmail = await verificaOtpEmail(
+    email,
+    OTP_PURPOSES.EMAIL_VERIFICATION,
+    payload.codiceVerificaEmail,
+  );
 
   // La password non viene mai salvata in chiaro, nemmeno durante la registrazione iniziale.
   const hashPasswordUtente = await hashPassword(password);
@@ -227,12 +388,17 @@ async function registerUser(payload) {
       mfaAttiva: false,
       notificheAttive: Boolean(payload.notificheAttive),
     },
+    consensi: {
+      trattamentoDati: consensoTrattamentoDati,
+      trattamentoDatiAccettatoIl: consensoTrattamentoDati ? new Date() : undefined,
+    },
     profilo: costruisciProfilo(payload),
   });
 
   const utenteConSessioni = await accountModel.findById(utente._id).select("+sessioni");
   const tokenAccesso = await creaSessioneUtente(utenteConSessioni);
   const utenteCorrente = await accountModel.findById(utente._id);
+  await EmailOtp.deleteOne({ _id: otpVerificaEmail._id });
 
   return {
     tokenAccesso,
@@ -292,16 +458,88 @@ async function logoutUser(utente, tokenAccesso) {
     (sessione) => sessione.hashToken !== hashToken,
   );
 
-  await utente.save();
+  await utente.save({ validateBeforeSave: false });
+}
+
+async function requestPasswordReset(payload) {
+  const email = normalizzaEmail(payload.email);
+
+  if (!email) {
+    throw createHttpError(400, "L'email Ã¨ obbligatoria");
+  }
+
+  const utente = await trovaUtentePerEmail(email);
+
+  if (!utente) {
+    throw createHttpError(404, "Nessun account associato a questa email");
+  }
+
+  await creaOtpEmail(email, OTP_PURPOSES.PASSWORD_RESET);
+
+  return {
+    message: "Codice di reset inviato all'email associata all'account",
+  };
+}
+
+async function resetPassword(payload) {
+  const email = normalizzaEmail(payload.email);
+  const password = payload.password || payload.nuovaPassword;
+
+  if (!email) {
+    throw createHttpError(400, "L'email Ã¨ obbligatoria");
+  }
+
+  assertStrongPassword(password);
+  const utente = await trovaUtentePerEmail(email);
+
+  if (!utente) {
+    throw createHttpError(404, "Nessun account associato a questa email");
+  }
+
+  const otp = await verificaOtpEmail(
+    email,
+    OTP_PURPOSES.PASSWORD_RESET,
+    payload.codiceReset,
+  );
+
+  utente.hashPassword = await hashPassword(password);
+  utente.sessioni = [];
+  await utente.save({ validateBeforeSave: false });
+  await EmailOtp.deleteOne({ _id: otp._id });
+
+  return {
+    message: "Password aggiornata con successo",
+  };
 }
 
 function getCurrentUser(utente) {
   return sanitizzaUtente(utente);
 }
 
+async function listPublicEntities() {
+  const enti = await PublicEntity.find({ tipoUtente: TIPI_UTENTE.ENTE_PUBBLICO })
+    .sort({ "profilo.denominazione": 1 })
+    .select("profilo.denominazione profilo.codiceUnivoco");
+
+  return enti.map((ente) => ({
+    id: ente._id,
+    denominazione: normalizzaValoreTesto(ente.profilo?.denominazione),
+    richiedeCodiceUnivoco: Boolean(normalizzaValoreTesto(ente.profilo?.codiceUnivoco)),
+  }));
+}
+
+function listPhoneCountries(locale) {
+  return costruisciListaPaesiTelefono(locale);
+}
+
 module.exports = {
   getCurrentUser,
+  listPhoneCountries,
+  listPublicEntities,
   loginUser,
   logoutUser,
+  requestEmailVerification,
+  requestPasswordReset,
+  resetPassword,
   registerUser,
 };
