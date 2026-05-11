@@ -12,7 +12,8 @@
     "db:sync-indexes": "node -r dotenv/config src/scripts/syncUserIndexes.js",
     "seed:enti": "node -r dotenv/config src/scripts/seedEntiPubblici.js",
     "test:auth-service": "node -r dotenv/config src/scripts/testAuthServiceIntegration.js",
-    "test:all": "npm run test:auth-service && npm run test:auth-api:auto",
+    "test:input-validation": "node -r dotenv/config src/scripts/testInputValidation.js",
+    "test:all": "npm run test:input-validation && npm run test:auth-service && npm run test:auth-api:auto",
     "test:auth-api": "node -r dotenv/config src/scripts/testAuthApiFlow.js",
     "test:auth-api:auto": "node -r dotenv/config src/scripts/testAuthApiFlowAuto.js"
   },
@@ -23,6 +24,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
+    "express-rate-limit": "^8.5.1",
+    "joi": "^18.2.1",
     "libphonenumber-js": "^1.13.0",
     "mongoose": "^8.23.1",
     "morgan": "^1.10.0",
