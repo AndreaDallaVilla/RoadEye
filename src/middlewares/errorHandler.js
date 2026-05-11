@@ -8,7 +8,7 @@ function errorHandler(error, _req, res, _next) {
 
   let statusCode = error.statusCode || 500;
   let message = error.message || "Errore interno del server";
-  let details;
+  let details = error.details;
 
   if (error?.code === 11000) {
     statusCode = 409;
