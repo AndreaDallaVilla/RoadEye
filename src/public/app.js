@@ -1,5 +1,6 @@
 (function () { 
   const TOKEN_KEY = "roadeye.token";
+  const USER_KEY = "roadeye.user";
   const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"]; // topic che hanno bisogno di avere la gravità
   const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica 
     "Incidente stradale": "#d93025",
@@ -95,6 +96,24 @@
     } else {
       localStorage.removeItem(TOKEN_KEY);
     }
+  }
+
+  function getStoredUser() {
+    try {
+      return JSON.parse(localStorage.getItem(USER_KEY));
+    } catch (_error) {
+      localStorage.removeItem(USER_KEY);
+      return null;
+    }
+  }
+
+  function setStoredUser(user) {
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      return;
+    }
+
+    localStorage.removeItem(USER_KEY);
   }
 
   function formatCoordinates(location) {
@@ -818,7 +837,9 @@
     const payload = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(payload.message || "Operazione non riuscita");
+      const error = new Error(payload.message || "Operazione non riuscita");
+      error.status = response.status;
+      throw error;
     }
 
     return payload;
@@ -971,6 +992,8 @@
   }
 
   function updateAuthState(user) { // gestione dell'utente 
+    setStoredUser(user);
+
     if (!user) {
       drawerUser.textContent = "Ciao, visitatore";
       headerAuthButton.textContent = "Accedi";
@@ -993,12 +1016,19 @@
       return;
     }
 
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      updateAuthState(storedUser);
+    }
+
     try {
       const payload = await requestJson("/api/auth/me");
       updateAuthState(payload.utente);
-    } catch (_error) {
-      setToken(null);
-      updateAuthState(null);
+    } catch (error) {
+      if (error.status === 401 || error.status === 403) {
+        setToken(null);
+        updateAuthState(null);
+      }
     }
   }
 
