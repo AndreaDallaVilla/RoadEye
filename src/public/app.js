@@ -1495,7 +1495,7 @@
 
     const content = [
       `<strong>${announcement.topic}</strong>`,
-      announcement.idUser ? `<span>${announcement.idUser}</span` : "?",
+      announcement.nomeAutore ? `<span>${announcement.nomeAutore}</span>` : "",
       announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
       announcement.gravita ? `<span>${announcement.gravita}</span>` : "",
       announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",

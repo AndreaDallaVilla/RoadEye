@@ -50,7 +50,7 @@ async function authenticate(req, _res, next) {
 
     // Aggiorna l'ultima attività della sessione per future logiche di audit o pulizia.
     sessioneCorrente.ultimoUtilizzoIl = adesso;
-    await utente.save();
+    await utente.save({ validateBeforeSave: false });
 
     req.tokenAccesso = tokenAccesso;
     req.user = utente;

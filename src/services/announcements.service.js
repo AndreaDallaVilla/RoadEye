@@ -1,6 +1,8 @@
 // Gestisce la business logic
 
 const Annuncio = require('../models/Announcements');
+const PublicEntity = require("../models/PublicEntity");
+const User = require("../models/User");
 
 // permette creare l’oggetto annuncio con i relativi attributi
 exports.creaAnnuncio = async function (datiAnnuncio) {
@@ -22,15 +24,77 @@ exports.creaAnnuncio = async function (datiAnnuncio) {
 }
 
 exports.listaAnnunciAttivi = async function () {
-    return Annuncio.find({
+    const annunci = await Annuncio.find({
         stato: "Attivo",
         "coordinate.latitudine": { $type: "number" },
         "coordinate.longitudine": { $type: "number" }
     })
         .sort({ dataOraPubblicazione: -1 })
-        .select("idAnnuncio descrizione topic gravita posizione coordinate dataOraPubblicazione")
+        .select("idAnnuncio idUser descrizione topic gravita posizione coordinate dataOraPubblicazione")
         .lean();
+
+    return arricchisciAutoriAnnunci(annunci);
 };
+
+function creaNomeAutore(utente) {
+    if (!utente) {
+        return "";
+    }
+
+    const profilo = utente.profilo || {};
+
+    if (profilo.nomeUtentePubblico) {
+        return profilo.nomeUtentePubblico;
+    }
+
+    if (profilo.nome || profilo.cognome) {
+        return [profilo.nome, profilo.cognome].filter(Boolean).join(" ");
+    }
+
+    if (profilo.denominazione) {
+        return profilo.denominazione;
+    }
+
+    return "";
+}
+
+async function arricchisciAutoriAnnunci(annunci) {
+    const codiciFiscali = [...new Set(annunci.map((annuncio) => annuncio.idUser).filter(Boolean))];
+
+    if (codiciFiscali.length === 0) {
+        return annunci;
+    }
+
+    const [utenti, enti] = await Promise.all([
+        User.find({ codiceFiscale: { $in: codiciFiscali } })
+            .select("codiceFiscale profilo.nome profilo.cognome profilo.nomeUtentePubblico")
+            .lean(),
+        PublicEntity.find({ codiceFiscale: { $in: codiciFiscali } })
+            .select("codiceFiscale profilo.denominazione")
+            .lean(),
+    ]);
+
+    const autoriByCodiceFiscale = new Map();
+
+    utenti.forEach((utente) => {
+        const nomeAutore = creaNomeAutore(utente);
+        if (nomeAutore) {
+            autoriByCodiceFiscale.set(utente.codiceFiscale, nomeAutore);
+        }
+    });
+
+    enti.forEach((ente) => {
+        const nomeAutore = creaNomeAutore(ente);
+        if (nomeAutore && !autoriByCodiceFiscale.has(ente.codiceFiscale)) {
+            autoriByCodiceFiscale.set(ente.codiceFiscale, nomeAutore);
+        }
+    });
+
+    return annunci.map((annuncio) => ({
+        ...annuncio,
+        nomeAutore: autoriByCodiceFiscale.get(annuncio.idUser) || annuncio.idUser,
+    }));
+}
 
 
 
