@@ -1,5 +1,7 @@
 const nodemailer = require("nodemailer");
 
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+
 function creaTransportSmtp() {
   const host = process.env.SMTP_HOST?.trim();
   const port = Number(process.env.SMTP_PORT || 587);
@@ -21,6 +23,52 @@ function creaTransportSmtp() {
   });
 }
 
+function parseSender() {
+  const from = process.env.EMAIL_FROM?.trim() || process.env.SMTP_USER?.trim();
+
+  if (!from) {
+    throw new Error("Configura EMAIL_FROM per inviare email reali");
+  }
+
+  const namedSender = from.match(/^(.*)<([^>]+)>$/);
+  if (!namedSender) {
+    return { email: from };
+  }
+
+  return {
+    name: namedSender[1].trim() || undefined,
+    email: namedSender[2].trim(),
+  };
+}
+
+async function sendMailBrevo({ to, subject, text }) {
+  const apiKey = process.env.BREVO_API_KEY?.trim();
+
+  if (!apiKey) {
+    throw new Error("Configura BREVO_API_KEY per inviare email con Brevo API");
+  }
+
+  const response = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "api-key": apiKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      sender: parseSender(),
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || `Invio email Brevo fallito (${response.status})`);
+  }
+}
+
 async function sendMail({ to, subject, text }) {
   const configuredProvider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
 
@@ -28,6 +76,11 @@ async function sendMail({ to, subject, text }) {
     console.log(`[email:console] To: ${to}`);
     console.log(`[email:console] Subject: ${subject}`);
     console.log(`[email:console] ${text}`);
+    return;
+  }
+
+  if (configuredProvider === "brevo") {
+    await sendMailBrevo({ to, subject, text });
     return;
   }
 
@@ -43,7 +96,7 @@ async function sendMail({ to, subject, text }) {
   }
 
   throw new Error(
-    "Provider email non supportato. Usa EMAIL_PROVIDER=console oppure EMAIL_PROVIDER=smtp.",
+    "Provider email non supportato. Usa EMAIL_PROVIDER=console, EMAIL_PROVIDER=brevo oppure EMAIL_PROVIDER=smtp.",
   );
 }
 
