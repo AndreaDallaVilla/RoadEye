@@ -1,7 +1,7 @@
-(function () {
+(function () { 
   const TOKEN_KEY = "roadeye.token";
-  const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"];
-  const TOPIC_MARKER_COLORS = {
+  const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"]; // topic che hanno bisogno di avere la gravità
+  const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica 
     "Incidente stradale": "#d93025",
     "Cantiere stradale": "#f9ab00",
     Evento: "#1a73e8",
@@ -11,9 +11,10 @@
   };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
+
   const map = document.querySelector("gmp-map");
   const marker = document.querySelector("gmp-advanced-marker");
-  const placePicker = document.querySelector("gmpx-place-picker");
+  const mapSearchInput = document.querySelector("#map-search");
   const status = document.querySelector("#maps-status");
   const drawer = document.querySelector("#drawer");
   const drawerUser = document.querySelector("#drawer-user");
@@ -22,31 +23,32 @@
   const homeMapHost = document.querySelector("#home-map-host");
   const reportMapHost = document.querySelector("#report-map-host");
   const sharedMapPanel = document.querySelector("#shared-map-panel");
-  const reportTopicStep = document.querySelector("#report-topic-step");
-  const reportForm = document.querySelector("#report-form");
-  const reportPosition = document.querySelector("#report-position");
-  const reportLatitude = document.querySelector("#report-latitude");
-  const reportLongitude = document.querySelector("#report-longitude");
-  const reportCategory = document.querySelector("#report-category");
+  const reportTopicStep = document.querySelector("#report-topic-step"); // scegliere il tipo di problema
+  const reportForm = document.querySelector("#report-form"); // modulo intero
+  const reportPosition = document.querySelector("#report-position"); 
+  const reportLatitude = document.querySelector("#report-latitude"); // campo per salvare le coordinate
+  const reportLongitude = document.querySelector("#report-longitude"); // campo per salvare le coordinate
+  const reportCategory = document.querySelector("#report-category");  // scegliere il tipo di problema
   const birthPlace = document.querySelector("#birth-place");
   const severityDialog = document.querySelector("#severity-dialog");
-  const severityRange = document.querySelector("#severity-range");
-  const severityLabel = document.querySelector("#severity-label");
-  const headerSectionTitle = document.querySelector("#header-section-title");
+  const severityRange = document.querySelector("#severity-range"); // gestione della gravità
+  const severityLabel = document.querySelector("#severity-label"); // gestione della gravità
+  const headerSectionTitle = document.querySelector("#header-section-title"); // cambiare il titolo in alto nella pagina dinamicamente
 
-  const viewTitles = {
+  const viewTitles = { // visione di titoli 
     home: "Home",
     report: "Nuova segnalazione",
     auth: "Accedi",
   };
 
-  const authTitles = {
+  const authTitles = { // sezione accedi
     "forgot-password": "Recupera password",
     login: "Accedi",
     register: "Registrati",
     "reset-password": "Nuova password",
   };
 
+  // variabili per la gestione degli annunci 
   let selectedPlace = null;
   let selectedLocation = null;
   let allowedBounds = null;
@@ -58,11 +60,12 @@
   const otpCooldownTimers = new Map();
   let announcementMarkers = [];
   let selectionInfoWindow = null;
+  let mapSearchAutocomplete = null;
   let reportPositionAutocomplete = null;
   let birthPlaceAutocomplete = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
-  function setStatus(message, state) {
+  function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
     status.textContent = message;
     status.classList.remove("ready", "error");
 
@@ -71,7 +74,7 @@
     }
   }
 
-  function setAuthMessage(message, state) {
+  function setAuthMessage(message, state) { // gestisce i messaggi di errore o successo per l'accesso utente
     authMessage.textContent = message || "";
     authMessage.classList.remove("ok", "error");
 
@@ -93,19 +96,29 @@
   }
 
   function formatCoordinates(location) {
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const normalizedLocation = getPlainLocation(location);
 
-    return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+    if (!normalizedLocation) {
+      return "";
+    }
+
+    return `${normalizedLocation.lat.toFixed(5)}, ${normalizedLocation.lng.toFixed(5)}`;
   }
 
-  function getPlainLocation(location) {
+  function getPlainLocation(location) { // gestisce le coordinate 
     if (!location) {
       return null;
     }
 
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const jsonLocation = typeof location.toJSON === "function" ? location.toJSON() : null;
+    const lat =
+      typeof location.lat === "function"
+        ? location.lat()
+        : location.lat ?? location.latitude ?? location.latitudine ?? jsonLocation?.lat ?? jsonLocation?.latitude;
+    const lng =
+      typeof location.lng === "function"
+        ? location.lng()
+        : location.lng ?? location.longitude ?? location.longitudine ?? jsonLocation?.lng ?? jsonLocation?.longitude;
 
     if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
       return null;
@@ -115,6 +128,67 @@
       lat: Number(lat),
       lng: Number(lng),
     };
+  }
+
+  function fitMapToViewport(viewport) {
+    if (!viewport || !map?.innerMap || typeof google === "undefined") {
+      return false;
+    }
+
+    try {
+      if (typeof viewport.getNorthEast === "function" && typeof viewport.getSouthWest === "function") {
+        map.innerMap.fitBounds(viewport);
+        return true;
+      }
+
+      const bounds = new google.maps.LatLngBounds(
+        { lat: viewport.south, lng: viewport.west },
+        { lat: viewport.north, lng: viewport.east },
+      );
+
+      if (!bounds.isEmpty()) {
+        map.innerMap.fitBounds(bounds);
+        return true;
+      }
+    } catch (_error) {
+      return false;
+    }
+
+    return false;
+  }
+
+  function moveMapToLocation(location, viewport, options = {}) {
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation || !map?.innerMap) {
+      return false;
+    }
+
+    if (!options.ignoreViewport && fitMapToViewport(viewport)) {
+      if (options.maxZoom && map.innerMap.getZoom() > options.maxZoom) {
+        map.innerMap.setZoom(options.maxZoom);
+      }
+
+      return true;
+    }
+
+    if (options.exactZoom) {
+      map.innerMap.setZoom(options.exactZoom);
+      map.innerMap.setCenter(normalizedLocation);
+      google.maps.event.addListenerOnce(map.innerMap, "idle", () => {
+        map.innerMap.setCenter(normalizedLocation);
+      });
+      return true;
+    }
+
+    map.innerMap.setZoom(17);
+    map.innerMap.setCenter(normalizedLocation);
+
+    if (options.maxZoom && map.innerMap.getZoom() > options.maxZoom) {
+      map.innerMap.setZoom(options.maxZoom);
+    }
+
+    return true;
   }
 
   function setSelectedLocation(location, address) {
@@ -130,7 +204,7 @@
     return currentView === "report" && currentReportStep === "details";
   }
 
-  function updateSelectionMarkerVisibility() {
+  function updateSelectionMarkerVisibility() { // gestione dei marker 
     if (!marker) {
       return;
     }
@@ -179,7 +253,7 @@
     return getAddressFromGeocodeResult(payload.risultati?.[0]);
   }
 
-  async function geocodeAddress(address) {
+  async function geocodeAddress(address) { // gestione delle coordinate 
     const params = new URLSearchParams({ indirizzo: address });
     const payload = await requestJson(`/api/maps/geocode?${params.toString()}`);
     const result = payload.risultati?.[0];
@@ -195,6 +269,94 @@
         lng: result.coordinate.longitudine,
       },
     };
+  }
+
+  async function geocodeTrentinoAddress(address) {
+    const normalizedAddress = typeof address === "string" ? address.trim() : "";
+
+    if (!normalizedAddress) {
+      return null;
+    }
+
+    const addressWithoutProvinceAbbreviation = normalizedAddress
+      .replace(/,\s*tn\b/i, "")
+      .trim();
+    const searchAddress = /trentino|provincia autonoma di trento/i.test(addressWithoutProvinceAbbreviation)
+      ? addressWithoutProvinceAbbreviation
+      : `${addressWithoutProvinceAbbreviation}, Provincia autonoma di Trento, Italia`;
+    const params = new URLSearchParams({
+      area: "trentino",
+      indirizzo: searchAddress,
+    });
+    const payload = await requestJson(`/api/maps/geocode?${params.toString()}`);
+    const resultsInsideBounds = (payload.risultati || []).filter((candidate) =>
+      candidate.coordinate && isInsideBounds({
+        lat: candidate.coordinate.latitudine,
+        lng: candidate.coordinate.longitudine,
+      }),
+    );
+    const result =
+      resultsInsideBounds.find((candidate) =>
+        candidate.tipi?.some((type) => ["locality", "administrative_area_level_3"].includes(type)),
+      ) || resultsInsideBounds[0];
+
+    if (!result?.coordinate) {
+      return null;
+    }
+
+    return {
+      address: getAddressFromGeocodeResult(result),
+      location: {
+        lat: result.coordinate.latitudine,
+        lng: result.coordinate.longitudine,
+      },
+      viewport: result.viewport,
+    };
+  }
+
+  async function resolvePlaceSelection(place, typedText = "") {
+    const searchText = [
+      typedText,
+      place?.name,
+      place?.formatted_address,
+    ].find((value) => typeof value === "string" && value.trim())?.trim() || "";
+    const geocoded = await geocodeTrentinoAddress(searchText).catch(() => null);
+
+    if (geocoded) {
+      return geocoded;
+    }
+
+    if (typedText) {
+      return null;
+    }
+
+    const location = getPlainLocation(place?.location || place?.geometry?.location);
+
+    if (!location) {
+      return null;
+    }
+
+    return {
+      address: searchText || formatCoordinates(location),
+      location,
+      viewport: place?.viewport || place?.geometry?.viewport,
+    };
+  }
+
+  async function searchMapLocation(place, typedText) {
+    setStatus("Ricerca localita...", "ready");
+
+    const resolvedPlace = await resolvePlaceSelection(place, typedText);
+
+    if (!resolvedPlace || !isInsideBounds(resolvedPlace.location)) {
+      setStatus("Luogo non trovato", "error");
+      return;
+    }
+
+    mapSearchInput.value = resolvedPlace.address || typedText || "";
+    moveMapToLocation(resolvedPlace.location, null, { exactZoom: 13, ignoreViewport: true });
+    setStatus("Mappa aggiornata", "ready");
+    selectionInfoWindow?.close();
   }
 
   function handleReportPlaceSelection(place, infowindow) {
@@ -224,14 +386,9 @@
     selectedPlace = place;
     setSelectedLocation(location, place.formatted_address || place.name || formatCoordinates(location));
 
-    if (place.geometry.viewport) {
-      map.innerMap.fitBounds(place.geometry.viewport);
-    } else {
-      map.center = location;
-      map.zoom = 17;
-    }
+    moveMapToLocation(location, place.geometry.viewport);
 
-    marker.position = location;
+    marker.position = getPlainLocation(location);
     setStatus("Luogo selezionato", "ready");
 
     infowindow.setContent(
@@ -271,6 +428,45 @@
       }
 
       handleReportPlaceSelection(reportPositionAutocomplete.getPlace(), infowindow);
+    });
+  }
+
+  async function setupMapSearchAutocomplete(config) {
+    if (!mapSearchInput || mapSearchAutocomplete || typeof google === "undefined") {
+      return;
+    }
+
+    if (!google.maps.places && google.maps.importLibrary) {
+      await google.maps.importLibrary("places");
+    }
+
+    if (!google.maps.places?.Autocomplete) {
+      return;
+    }
+
+    const bounds = new google.maps.LatLngBounds(
+      { lat: config.bounds.south, lng: config.bounds.west },
+      { lat: config.bounds.north, lng: config.bounds.east },
+    );
+
+    mapSearchAutocomplete = new google.maps.places.Autocomplete(mapSearchInput, {
+      bounds,
+      componentRestrictions: { country: "it" },
+      fields: ["formatted_address", "geometry", "name", "types"],
+      strictBounds: false,
+    });
+
+    mapSearchAutocomplete.addListener("place_changed", () => {
+      searchMapLocation(mapSearchAutocomplete.getPlace(), mapSearchInput.value);
+    });
+
+    mapSearchInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      event.preventDefault();
+      searchMapLocation(null, mapSearchInput.value);
     });
   }
 
@@ -342,7 +538,7 @@
     });
   }
 
-  function createApiLoader(config) {
+  function createApiLoader(config) { // gestione dell'api 
     const loader = document.createElement("gmpx-api-loader");
     loader.setAttribute("key", config.apiKey);
     loader.setAttribute("solution-channel", "GMP_GE_mapsandplacesautocomplete_v2");
@@ -356,14 +552,17 @@
       return true;
     }
 
-    const lat = typeof location.lat === "function" ? location.lat() : location.lat;
-    const lng = typeof location.lng === "function" ? location.lng() : location.lng;
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation) {
+      return false;
+    }
 
     return (
-      lat >= allowedBounds.south &&
-      lat <= allowedBounds.north &&
-      lng >= allowedBounds.west &&
-      lng <= allowedBounds.east
+      normalizedLocation.lat >= allowedBounds.south &&
+      normalizedLocation.lat <= allowedBounds.north &&
+      normalizedLocation.lng >= allowedBounds.west &&
+      normalizedLocation.lng <= allowedBounds.east
     );
   }
 
@@ -428,11 +627,11 @@
     }, 0);
   }
 
-  function getSelectedSeverity() {
+  function getSelectedSeverity() { // gestione della gravità
     return severityValues[Number(severityRange.value) - 1] || "Media";
   }
 
-  function updateSeveritySlider() {
+  function updateSeveritySlider() { // gestione dello slider della gravità
     const value = Number(severityRange.value);
     const max = Number(severityRange.max);
     const progress = ((value - 1) / (max - 1)) * 100;
@@ -444,7 +643,7 @@
     severityRange.style.setProperty("--severity-progress", `${progress}%`);
   }
 
-  function buildAnnouncementPayload(form, gravita) {
+  function buildAnnouncementPayload(form, gravita) { // creazione dell'annuncio 
     const data = formToObject(form);
     const latitudine = Number(data.latitudine);
     const longitudine = Number(data.longitudine);
@@ -466,7 +665,7 @@
     };
   }
 
-  async function publishAnnouncement(form, gravita) {
+  async function publishAnnouncement(form, gravita) { // pubblicazione dell'annuncio 
     if (!reportLatitude.value || !reportLongitude.value) {
       const typedAddress = reportPosition.value.trim();
       const geocoded = typedAddress ? await geocodeAddress(typedAddress) : null;
@@ -498,7 +697,7 @@
     showView("home");
   }
 
-  function showAuth(panelName) {
+  function showAuth(panelName) { // gestione pagina di autenticazione
     showView("auth");
     setAuthMessage("");
 
@@ -514,7 +713,7 @@
     headerSectionTitle.textContent = authTitles[panelName] || viewTitles.auth;
   }
 
-  function initPasswordToggles() {
+  function initPasswordToggles() { // gestione della password
     document.querySelectorAll(".password-toggle").forEach((button) => {
       const field = button.closest(".password-field");
       const input = field ? field.querySelector("input") : null;
@@ -534,7 +733,7 @@
     });
   }
 
-  function getPasswordStrength(password) {
+  function getPasswordStrength(password) { // gestione della forza della password 
     const checks = [
       password.length >= 10,
       /[0-9]/.test(password),
@@ -575,7 +774,7 @@
     };
   }
 
-  function updatePasswordStrength(input, indicator) {
+  function updatePasswordStrength(input, indicator) { // gestione della forza della password (etichetta)
     const strength = getPasswordStrength(input.value);
     const text = indicator.querySelector(".strength-text");
 
@@ -589,7 +788,7 @@
     return strength;
   }
 
-  function initPasswordStrengthIndicator() {
+  function initPasswordStrengthIndicator() { // gestione della forza della password 
     document.querySelectorAll("[data-password-strength]").forEach((indicator) => {
       const label = indicator.closest("label");
       const passwordInput = label ? label.querySelector('input[name="password"]') : null;
@@ -639,7 +838,7 @@
     return data;
   }
 
-  function validatePhoneFields(form) {
+  function validatePhoneFields(form) { // gestione dei campi inerenti al telefono
     const countryInput = form.querySelector('select[name="nazioneTelefono"]');
     const phoneInput = form.querySelector('input[name="numeroTelefono"]');
 
@@ -672,7 +871,7 @@
     return true;
   }
 
-  async function loadPhoneCountries() {
+  async function loadPhoneCountries() { // gestione del paese di provenienza per la gestione del numero di telefono
     const select = document.querySelector('select[name="nazioneTelefono"]');
 
     if (!select) {
@@ -704,7 +903,7 @@
     }
   }
 
-  function toggleRegisterVerificationStep(enabled) {
+  function toggleRegisterVerificationStep(enabled) { // gestione della registrazione dell'utente
     const registerForm = document.querySelector("#register-form");
     const row = document.querySelector("#email-verification-row");
     const input = row ? row.querySelector("input") : null;
@@ -725,7 +924,7 @@
     }
   }
 
-  async function requestRegisterEmailVerification() {
+  async function requestRegisterEmailVerification() { // gestione della verifica dell'email 
     const emailInput = document.querySelector("#register-email");
     const sendButton = document.querySelector("#send-email-verification");
     const email = emailInput?.value.trim();
@@ -768,7 +967,7 @@
     }
   }
 
-  function updateAuthState(user) {
+  function updateAuthState(user) { // gestione dell'utente 
     if (!user) {
       drawerUser.textContent = "Ciao, visitatore";
       headerAuthButton.textContent = "Accedi";
@@ -800,7 +999,7 @@
     }
   }
 
-  function updatePublicEntityUniqueCodeRequirement() {
+  function updatePublicEntityUniqueCodeRequirement() { // gestione dell'ente pubblico
     const select = document.querySelector("#public-entity-select");
     const row = document.querySelector("#entity-unique-code-row");
     const input = row ? row.querySelector("input") : null;
@@ -867,7 +1066,7 @@
     }
   }
 
-  function showLoginMode(mode) {
+  function showLoginMode(mode) { // gestione del login
     document.querySelectorAll("[data-login-mode]").forEach((button) => {
       button.classList.toggle("active", button.dataset.loginMode === mode);
     });
@@ -1144,7 +1343,7 @@
     });
   }
 
-  async function initMap() {
+  async function initMap() { // gestione della mappa 
     try {
       const config = await requestJson("/api/maps/client-config");
       allowedBounds = config.bounds;
@@ -1155,7 +1354,6 @@
       map.setAttribute("map-id", config.mapId);
 
       await customElements.whenDefined("gmp-map");
-      await customElements.whenDefined("gmpx-place-picker");
       await customElements.whenDefined("gmp-advanced-marker");
 
       map.innerMap.setOptions({
@@ -1182,6 +1380,7 @@
 
       const infowindow = new google.maps.InfoWindow();
       selectionInfoWindow = infowindow;
+      await setupMapSearchAutocomplete(config);
       await setupReportPositionAutocomplete(config, infowindow);
       await setupBirthPlaceAutocomplete();
 
@@ -1228,73 +1427,6 @@
         }
       });
 
-      placePicker.addEventListener("gmpx-placechange", () => {
-        const place = placePicker.value;
-
-        if (!place.location) {
-          if (isReportLocationSelectionActive()) {
-            selectedPlace = null;
-            selectedLocation = null;
-            reportPosition.value = "Luogo non trovato";
-            reportLatitude.value = "";
-            reportLongitude.value = "";
-          }
-
-          setStatus("Luogo non trovato", "error");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          return;
-        }
-
-        if (!isInsideBounds(place.location)) {
-          if (isReportLocationSelectionActive()) {
-            selectedPlace = null;
-            selectedLocation = null;
-            reportPosition.value = "Seleziona un luogo in Provincia di Trento";
-            reportLatitude.value = "";
-            reportLongitude.value = "";
-          }
-
-          setStatus("Fuori area Trentino", "error");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          map.innerMap.fitBounds(config.bounds);
-          return;
-        }
-
-        if (!isReportLocationSelectionActive()) {
-          if (place.viewport) {
-            map.innerMap.fitBounds(place.viewport);
-          } else {
-            map.center = place.location;
-            map.zoom = 17;
-          }
-
-          setStatus("Mappa aggiornata", "ready");
-          infowindow.close();
-          updateSelectionMarkerVisibility();
-          return;
-        }
-
-        selectedPlace = place;
-        setSelectedLocation(place.location, place.formattedAddress || place.displayName || formatCoordinates(place.location));
-
-        if (place.viewport) {
-          map.innerMap.fitBounds(place.viewport);
-        } else {
-          map.center = place.location;
-          map.zoom = 17;
-        }
-
-        marker.position = place.location;
-        setStatus("Luogo selezionato", "ready");
-
-        infowindow.setContent(
-          `<strong>${place.displayName || "Luogo selezionato"}</strong><br><span>${place.formattedAddress || ""}</span>`,
-        );
-        infowindow.open(map.innerMap, marker);
-      });
-
       await loadActiveAnnouncements();
       setStatus("Mappa pronta", "ready");
     } catch (error) {
@@ -1302,14 +1434,14 @@
     }
   }
 
-  function clearAnnouncementMarkers() {
+  function clearAnnouncementMarkers() { // elimina il marker
     announcementMarkers.forEach((announcementMarker) => {
       announcementMarker.map = null;
     });
     announcementMarkers = [];
   }
 
-  function createAnnouncementMarker(announcement) {
+  function createAnnouncementMarker(announcement) { // crea il marker
     const position = {
       lat: announcement.coordinate.latitudine,
       lng: announcement.coordinate.longitudine,
@@ -1356,6 +1488,58 @@
     updateAnnouncementMarkersVisibility();
   }
 
+  // inserimento degli annunci nella loro sezione 
+  function sezioneAnnunci(announcement) {
+    const container = document.querySelector('.lista-annunci');
+    if (!container) return;
+
+    const content = [
+      `<strong>${announcement.topic}</strong>`,
+      announcement.idUser ? `<span>${announcement.idUser}</span` : "?",
+      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
+      announcement.gravita ? `<span>${announcement.gravita}</span>` : "",
+      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
+    ].filter(Boolean).join("<br>");
+
+    const div = document.createElement('div');
+    div.className = 'annuncio-news';
+
+    const color = (typeof TOPIC_MARKER_COLORS !== 'undefined') ? TOPIC_MARKER_COLORS[announcement.topic] : "#141414";
+    div.style.borderLeft = `5px solid ${color}`;
+    div.innerHTML = content;
+
+    container.appendChild(div);
+  }
+
+  // 2. Questa funzione si occupa solo di SCARICARE i dati e pulire la lista
+  async function aggiornaListaTestualeAnnunci() {
+    const container = document.querySelector('.lista-annunci');
+    if (!container) return;
+
+    try {
+      const response = await fetch('/api/announcements/active');
+      if (!response.ok) throw new Error(`Errore server: ${response.status}`);
+
+      const payload = await response.json();
+      const annunciArray = payload.data || [];
+
+      container.innerHTML = ''; // Svuota la lista prima di riempirla
+
+      if (annunciArray.length === 0) {
+        container.innerHTML = '<p>Nessun annuncio attivo al momento.</p>';
+        return;
+      }
+
+      // CHIAMATA ALLA FUNZIONE SOPRA
+      annunciArray.forEach(announcement => sezioneAnnunci(announcement));
+
+    } catch (error) {
+      console.error("Errore:", error);
+      container.innerHTML = '<p style="color: red;">Impossibile caricare le notizie.</p>';
+    }
+  }
+
+
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
     bindForms();
@@ -1364,5 +1548,6 @@
     loadPhoneCountries();
     refreshCurrentUser();
     initMap();
+    aggiornaListaTestualeAnnunci();
   });
 })();

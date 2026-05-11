@@ -159,9 +159,21 @@ main {
   min-width: 0;
 }
 
-gmpx-place-picker {
+.map-search-host input {
+  border: 1px solid #8f98a3;
+  border-radius: 6px;
+  display: block;
+  font: inherit;
+  min-height: 52px;
+  padding: 0 16px;
   display: block;
   width: 100%;
+}
+
+.map-search-host input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+  outline: none;
 }
 
 .chip-row {
@@ -254,31 +266,76 @@ gmp-map {
 }
 
 .news-box ul {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 15px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    list-style: none !important;
 }
 
 .news-box li {
-  display: grid;
-  grid-template-columns: 28px 1fr;
-  align-items: center;
-  gap: 8px;
-  border: 2px solid var(--line);
-  padding: 8px;
-  font-size: 0.85rem;
-  text-transform: uppercase;
+    display: flex !important;
+    flex-direction: row !important; /* Icona a sinistra, testo a destra */
+    align-items: flex-start !important;
+    padding: 12px !important;
+    border: 2px solid #ccc !important;
+    background: #fff !important;
+    position: relative !important; /* ASSOLUTAMENTE NO absolute o fixed */
+    width: 100% !important;
+    box-sizing: border-box !important;
 }
 
-.news-box span {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border: 2px solid var(--line);
-  border-radius: 50%;
+.news-box li, .annuncio-news {
+    border: 2px solid var(--line, #141414); /* Il bordo principale */
+    margin-bottom: 12px;                  /* Spazio tra un annuncio e l'altro */
+    padding: 12px;                        /* Spazio interno tra bordo e testo */
+    background-color: #ffffff;            /* Sfondo bianco per staccare dal fondo */
+    list-style: none;                     /* Toglie il pallino nero della lista */
+    
+    /* Opzionale: rende l'annuncio un po' più moderno */
+    border-radius: 4px;                   
+    display: block;                       
+    box-shadow: 2px 2px 0px var(--line, #141414); /* Effetto "retro" coerente col tuo stile */
+}
+
+/* Rimuove il margine dall'ultimo elemento per non lasciare spazio vuoto sotto */
+.news-box li:last-child {
+    margin-bottom: 0;
+}
+
+/* Cerchio per l'iniziale */
+.news-box li span {
+    flex-shrink: 0 !important;
+    width: 35px !important;
+    height: 35px !important;
+    border-radius: 50% !important;
+    border: 2px solid #333 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-right: 12px !important;
+    font-weight: bold !important;
+}
+
+/* Contenitore per il testo */
+.news-box .testo-annuncio {
+    display: block !important;
+    text-align: left !important;
+}
+
+.news-box strong {
+    display: block !important;
+    font-size: 1rem !important;
+    margin-bottom: 4px !important;
+    text-transform: uppercase;
+}
+
+.news-box small {
+    display: block !important;
+    font-size: 0.85rem !important;
+    line-height: 1.4 !important;
+    color: #444 !important;
 }
 
 .drawer {

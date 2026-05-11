@@ -112,7 +112,14 @@ async function geocodificaIndirizzo(payload) {
     throw createHttpError(400, "Indirizzo obbligatorio");
   }
 
-  return chiamaGeocodingApi({ address: indirizzo });
+  const params = { address: indirizzo };
+
+  if (payload.area === "trentino") {
+    params.bounds = `${TRENTINO_BOUNDS.south},${TRENTINO_BOUNDS.west}|${TRENTINO_BOUNDS.north},${TRENTINO_BOUNDS.east}`;
+    params.components = "country:IT";
+  }
+
+  return chiamaGeocodingApi(params);
 }
 
 async function geocodificaInversa(payload) {

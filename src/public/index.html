@@ -6,7 +6,7 @@
     <title>RoadEye</title>
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/@googlemaps/extended-component-library/0.6.11/index.min.js"></script>
-    <script defer src="/app.js"></script>
+    <script defer src="/app.js?v=map-search-5"></script>
   </head>
   <body>
     <div class="phone-app">
@@ -39,7 +39,7 @@
             <div class="map-panel" id="shared-map-panel">
               <div class="search-row">
                 <div class="map-search-host">
-                  <gmpx-place-picker placeholder="Cerca in Provincia di Trento"></gmpx-place-picker>
+                  <input id="map-search" type="search" placeholder="Cerca in Provincia di Trento" autocomplete="off">
                 </div>
               </div>
 
@@ -65,11 +65,9 @@
 
           <section class="news-box">
             <h2>Ultime notizie vicine a te</h2>
+              <div class="lista-annunci"></div>
             <ul>
-              <li><span>!</span><strong>Incidente tra autoveicoli - Trento</strong></li>
-              <li><span>!</span><strong>Cantiere stradale - Rovereto</strong></li>
-              <li><span>!</span><strong>Percorso con pericolo - Pergine</strong></li>
-            </ul>
+              </ul>
           </section>
         </section>
 

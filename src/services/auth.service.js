@@ -312,7 +312,7 @@ async function creaSessioneUtente(utente) {
     scadeIl,
   });
 
-  await utente.save();
+  await utente.save({ validateBeforeSave: false });
 
   return tokenAccesso;
 }
@@ -458,7 +458,7 @@ async function logoutUser(utente, tokenAccesso) {
     (sessione) => sessione.hashToken !== hashToken,
   );
 
-  await utente.save();
+  await utente.save({ validateBeforeSave: false });
 }
 
 async function requestPasswordReset(payload) {
@@ -504,7 +504,7 @@ async function resetPassword(payload) {
 
   utente.hashPassword = await hashPassword(password);
   utente.sessioni = [];
-  await utente.save();
+  await utente.save({ validateBeforeSave: false });
   await EmailOtp.deleteOne({ _id: otp._id });
 
   return {
