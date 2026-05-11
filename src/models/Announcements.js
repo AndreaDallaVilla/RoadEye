@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 
 const STATI_ANNUNCIO = ["Attivo", "Archiviato", "Eliminato"];
 const TOPIC = ["Incidente stradale","Cantiere stradale", "Evento", "Ferimento animali", "Pericolo bordo strada", "Autovelox"];
-const GRAVITA = ["Bassa", "Media", "Alta", "Massima"];;
+const GRAVITA = ["Bassa", "Media", "Alta", "Altissima"];;
 const VISIBILITA_ANNUNCIO = ["Tutti", "Nessuno"]; 
 const INTERAZIONE_CONSENTITA = ["Tutti", "Utenti Registrati", "Ente emittente", "Centrale operativa"];
 

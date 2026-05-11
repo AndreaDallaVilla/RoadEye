@@ -3,6 +3,7 @@ const { Joi, text } = require("./common.validation");
 const geocodeQuerySchema = Joi.object({
   indirizzo: text({ max: 300 }).optional(),
   address: text({ max: 300 }).optional(),
+  area: Joi.string().valid("trentino").optional(),
 }).or("indirizzo", "address");
 
 const reverseGeocodeQuerySchema = Joi.object({

@@ -66,10 +66,12 @@
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
-    status.textContent = message;
+    const shouldShow = state === "error" && message;
+    status.textContent = shouldShow ? message : "";
+    status.hidden = !shouldShow;
     status.classList.remove("ready", "error");
 
-    if (state) {
+    if (shouldShow) {
       status.classList.add(state);
     }
   }
@@ -693,6 +695,7 @@
     document.querySelectorAll("[data-category]").forEach((item) => item.classList.remove("selected"));
     showReportStep("topic");
     await loadActiveAnnouncements();
+    await aggiornaListaTestualeAnnunci();
     window.alert("Annuncio pubblicato.");
     showView("home");
   }

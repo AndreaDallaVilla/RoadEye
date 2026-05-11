@@ -224,6 +224,7 @@ gmp-map {
 }
 
 .map-status {
+  display: none;
   position: absolute;
   z-index: 2;
   top: 8px;
@@ -235,12 +236,8 @@ gmp-map {
   font-size: 0.78rem;
 }
 
-.map-status.ready {
-  border-color: var(--ok);
-  color: var(--ok);
-}
-
-.map-status.error {
+.map-status.error:not([hidden]) {
+  display: block;
   border-color: var(--accent);
   color: var(--accent);
 }
