@@ -10,11 +10,7 @@
     "docs": "jsdoc -c jsdoc.json",
     "init:db": "node src/scripts/initDb.js",
     "db:sync-indexes": "node -r dotenv/config src/scripts/syncUserIndexes.js",
-    "seed:enti": "node -r dotenv/config src/scripts/seedEntiPubblici.js",
-    "test:auth-service": "node -r dotenv/config src/scripts/testAuthServiceIntegration.js",
-    "test:all": "npm run test:auth-service && npm run test:auth-api:auto",
-    "test:auth-api": "node -r dotenv/config src/scripts/testAuthApiFlow.js",
-    "test:auth-api:auto": "node -r dotenv/config src/scripts/testAuthApiFlowAuto.js"
+    "seed:enti": "node -r dotenv/config src/scripts/seedEntiPubblici.js"
   },
   "engines": {
     "node": ">=20.0.0"
