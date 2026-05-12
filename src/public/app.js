@@ -1526,6 +1526,13 @@
     const container = document.querySelector('.lista-annunci');
     if (!container) return;
 
+    const div = document.createElement('div');
+    div.className = 'annuncio-news';
+    div.style.cursor = 'pointer';
+
+    // gestione del click sull'annuncio
+    div.onclick = () => mostraDettagliCompleti(announcement);
+
     const content = [
       `<strong>${announcement.topic}</strong>`,
       announcement.nomeAutore ? `<span>${announcement.nomeAutore}</span>` : "",
@@ -1534,9 +1541,6 @@
       announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
     ].filter(Boolean).join("<br>");
 
-    const div = document.createElement('div');
-    div.className = 'annuncio-news';
-
     const color = (typeof TOPIC_MARKER_COLORS !== 'undefined') ? TOPIC_MARKER_COLORS[announcement.topic] : "#141414";
     div.style.borderLeft = `5px solid ${color}`;
     div.innerHTML = content;
@@ -1544,7 +1548,23 @@
     container.appendChild(div);
   }
 
-  // 2. Questa funzione si occupa solo di SCARICARE i dati e pulire la lista
+  function mostraDettagliCompleti(annuncio) { // funzione per aprire una finestra con i dati estesi
+    // inserisce i dati dell'annuncio cliccato nei campi della Modal
+    document.getElementById('det-topic').innerText = annuncio.topic;
+    document.getElementById('det-pos').innerText = annuncio.posizione || "Non specificata";
+    document.getElementById('det-nomAut').innerText = annuncio.nomeAutore || "Anonimo";
+    document.getElementById('det-gravita').innerText = annuncio.gravita || "N/A";
+    document.getElementById('det-desc').innerText = annuncio.descrizione || "Nessun dettaglio aggiuntivo disponibile.";
+    document.getElementById('det-id').innerText = annuncio.idAnnuncio;
+
+    // appare la finestra
+    document.getElementById('modal-dettaglio').style.display = 'block';
+
+    // blocca lo scroll della pagina sotto
+    document.body.style.overflow = 'hidden';
+  }
+
+  // questa funzione si occupa solo di scaricare i dati e pulire la lista
   async function aggiornaListaTestualeAnnunci() {
     const container = document.querySelector('.lista-annunci');
     if (!container) return;
@@ -1563,15 +1583,14 @@
         return;
       }
 
-      // CHIAMATA ALLA FUNZIONE SOPRA
+      // chiamata alla funzione sezione annunci 
       annunciArray.forEach(announcement => sezioneAnnunci(announcement));
 
     } catch (error) {
       console.error("Errore:", error);
       container.innerHTML = '<p style="color: red;">Impossibile caricare le notizie.</p>';
     }
-  }
-
+  } 
 
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
@@ -1584,3 +1603,8 @@
     aggiornaListaTestualeAnnunci();
   });
 })();
+
+function chiudiDettaglio() { // chiude il pannello dell'annuncio 
+  document.getElementById('modal-dettaglio').style.display = 'none';
+  document.body.style.overflow = 'auto';
+}
