@@ -2,13 +2,15 @@ openapi: 3.0.3
 info:
   title: RoadEye API
   version: 0.1.0
-  description: Specifica OpenAPI dei servizi REST esposti dal backend RoadEye.
+  description: Specifica OpenAPI dei servizi REST esposti dal backend RoadEye. Gli endpoint documentati usano il prefisso /api/v1; il prefisso storico /api resta disponibile come alias di compatibilita per la versione corrente.
   license:
     name: Proprietary
 
 servers:
   - url: http://localhost:3001
     description: Server locale
+  - url: https://www.roadeye.it
+    description: Deploy Railway
 
 tags:
   - name: Health
@@ -36,7 +38,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
-  /api/auth/register:
+  /api/v1/auth/register:
     post:
       tags:
         - Auth
@@ -92,7 +94,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/auth/login:
+  /api/v1/auth/login:
     post:
       tags:
         - Auth
@@ -148,7 +150,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/auth/public-entities:
+  /api/v1/auth/public-entities:
     get:
       tags:
         - Auth
@@ -165,7 +167,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/auth/phone-countries:
+  /api/v1/auth/phone-countries:
     get:
       tags:
         - Auth
@@ -190,7 +192,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/auth/me:
+  /api/v1/auth/me:
     get:
       tags:
         - Auth
@@ -215,7 +217,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/auth/logout:
+  /api/v1/auth/logout:
     post:
       tags:
         - Auth
@@ -241,7 +243,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/maps/geocode:
+  /api/v1/maps/geocode:
     get:
       tags:
         - Maps
@@ -262,6 +264,14 @@ paths:
           required: false
           schema:
             type: string
+        - name: area
+          in: query
+          description: Limita la ricerca all'area supportata.
+          required: false
+          schema:
+            type: string
+            enum:
+              - trentino
       responses:
         "200":
           description: Risultati di geocodifica
@@ -278,7 +288,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/maps/reverse-geocode:
+  /api/v1/maps/reverse-geocode:
     get:
       tags:
         - Maps
@@ -344,7 +354,83 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/maps/embed-url:
+  /api/v1/maps/nearest-road:
+    get:
+      tags:
+        - Maps
+      summary: Verifica se un punto e vicino a una strada
+      description: Usa Google Roads API per agganciare una coppia di coordinate alla strada piu vicina e dire se il punto e accettabile per pubblicare un annuncio.
+      operationId: getNearestRoad
+      security: []
+      parameters:
+        - name: latitudine
+          in: query
+          description: Latitudine del punto. In alternativa e accettato anche il parametro lat.
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+          example: 46.0667
+        - name: lat
+          in: query
+          description: Alias di latitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: longitudine
+          in: query
+          description: Longitudine del punto. In alternativa sono accettati anche i parametri lng o lon.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+          example: 11.1211
+        - name: lng
+          in: query
+          description: Alias di longitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: lon
+          in: query
+          description: Alias di longitudine.
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: distanzaMassimaMetri
+          in: query
+          description: Distanza massima ammessa dalla strada piu vicina.
+          required: false
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+            default: 35
+      responses:
+        "200":
+          description: Esito della verifica strada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NearestRoadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/maps/embed-url:
     get:
       tags:
         - Maps
@@ -452,7 +538,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/maps/client-config:
+  /api/v1/maps/client-config:
     get:
       tags:
         - Maps
@@ -471,7 +557,7 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/announcements:
+  /api/v1/announcements:
     post:
       tags:
         - Announcements
@@ -520,7 +606,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ControllerErrorResponse"
 
-  /api/announcements/active:
+  /api/v1/announcements/active:
     get:
       tags:
         - Announcements
@@ -979,6 +1065,33 @@ components:
           type: number
           minimum: -180
           maximum: 180
+
+    NearestRoadResponse:
+      type: object
+      required:
+        - suStrada
+        - messaggio
+      properties:
+        suStrada:
+          type: boolean
+          description: Indica se il punto e abbastanza vicino a una strada.
+          example: true
+        distanzaMetri:
+          type: number
+          description: Distanza tra il punto originale e il punto agganciato alla strada.
+          example: 28.87
+        distanzaMassimaMetri:
+          type: number
+          description: Soglia massima usata per considerare valido il punto.
+          example: 35
+        placeId:
+          type: string
+          description: Identificativo Google della strada piu vicina, se disponibile.
+        coordinate:
+          $ref: "#/components/schemas/Coordinates"
+        messaggio:
+          type: string
+          example: Punto valido su strada.
 
     MapsClientConfig:
       type: object

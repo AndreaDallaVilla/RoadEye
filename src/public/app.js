@@ -11,6 +11,22 @@
     Autovelox: "#188038",
   };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
+  const API_BASE_URL = "/api/v1";
+  const AREA_CLUSTER_MAX_ZOOM = 8;
+  const ANNOUNCEMENT_MARKERS_MIN_ZOOM = 12;
+  const TRENTINO_CLUSTER_AREAS = [
+    { label: "Trento e Valle dell'Adige", latMin: 45.98, latMax: 46.2, lngMin: 11.0, lngMax: 11.22 },
+    { label: "Rovereto e Vallagarina", latMin: 45.68, latMax: 45.98, lngMin: 10.88, lngMax: 11.18 },
+    { label: "Alto Garda e Ledro", latMin: 45.78, latMax: 45.98, lngMin: 10.58, lngMax: 10.98 },
+    { label: "Giudicarie e Rendena", latMin: 45.88, latMax: 46.28, lngMin: 10.45, lngMax: 10.9 },
+    { label: "Val di Non", latMin: 46.22, latMax: 46.54, lngMin: 10.92, lngMax: 11.22 },
+    { label: "Val di Sole", latMin: 46.22, latMax: 46.55, lngMin: 10.55, lngMax: 10.98 },
+    { label: "Bolzano/Merano", latMin: 46.45, latMax: 46.75, lngMin: 10.9, lngMax: 11.45 },
+    { label: "Rotaliana e Paganella", latMin: 46.15, latMax: 46.32, lngMin: 10.98, lngMax: 11.25 },
+    { label: "Valsugana", latMin: 45.92, latMax: 46.16, lngMin: 11.22, lngMax: 11.72 },
+    { label: "Fiemme e Fassa", latMin: 46.18, latMax: 46.55, lngMin: 11.32, lngMax: 11.82 },
+    { label: "Primiero", latMin: 46.05, latMax: 46.32, lngMin: 11.68, lngMax: 11.98 },
+  ];
 
 
   const map = document.querySelector("gmp-map");
@@ -67,6 +83,9 @@
   let clientMapConfig = null;
   let detailMap = null;
   let detailMapMarker = null;
+  let announcementClusterMarkers = [];
+  let activeAnnouncements = [];
+  let openClusterInfoWindow = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
@@ -243,7 +262,18 @@
   }
 
   function shouldShowAnnouncementMarkers() {
-    return currentView === "home";
+    const zoom = map?.innerMap?.getZoom?.();
+    return currentView === "home" && Number.isFinite(zoom) && zoom >= ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+  }
+
+  function shouldShowAnnouncementClusters() {
+    const zoom = map?.innerMap?.getZoom?.();
+    return currentView === "home" && Number.isFinite(zoom) && zoom < ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+  }
+
+  function getClusterLevel() {
+    const zoom = map?.innerMap?.getZoom?.();
+    return Number.isFinite(zoom) && zoom <= AREA_CLUSTER_MAX_ZOOM ? "area" : "comune";
   }
 
   function updateAnnouncementMarkersVisibility() {
@@ -256,6 +286,17 @@
     announcementMarkers.forEach((announcementMarker) => {
       announcementMarker.map = markerMap;
     });
+
+    const clusterMap = shouldShowAnnouncementClusters() ? map.innerMap : null;
+
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = clusterMap;
+    });
+
+    if (!clusterMap) {
+      openClusterInfoWindow?.close();
+      openClusterInfoWindow = null;
+    }
   }
 
   function getAddressFromGeocodeResult(result) {
@@ -883,8 +924,14 @@
     });
   }
 
+  function getVersionedApiUrl(url) {
+    return typeof url === "string" && url.startsWith("/api/")
+      ? `${API_BASE_URL}${url.slice(4)}`
+      : url;
+  }
+
   async function requestJson(url, options) {
-    const response = await fetch(url, {
+    const response = await fetch(getVersionedApiUrl(url), {
       headers: {
         "Content-Type": "application/json",
         ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
@@ -1526,6 +1573,8 @@
           setStatus(error.message, "error");
         }
       });
+      map.innerMap.addListener("zoom_changed", updateAnnouncementMarkersVisibility);
+      map.innerMap.addListener("zoom_changed", refreshAnnouncementClusters);
 
       await loadActiveAnnouncements();
       setStatus("Mappa pronta", "ready");
@@ -1539,6 +1588,152 @@
       announcementMarker.map = null;
     });
     announcementMarkers = [];
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = null;
+    });
+    announcementClusterMarkers = [];
+  }
+
+  function clearAnnouncementClusterMarkers() {
+    openClusterInfoWindow?.close();
+    openClusterInfoWindow = null;
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = null;
+    });
+    announcementClusterMarkers = [];
+  }
+
+  function refreshAnnouncementClusters() {
+    if (!activeAnnouncements.length || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    const previousLevel = announcementClusterMarkers[0]?.clusterLevel;
+    const nextLevel = getClusterLevel();
+
+    if (previousLevel === nextLevel) {
+      return;
+    }
+
+    clearAnnouncementClusterMarkers();
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements);
+    updateAnnouncementMarkersVisibility();
+  }
+
+  function getAnnouncementComune(announcement) {
+    const position = typeof announcement.posizione === "string" ? announcement.posizione.trim() : "";
+
+    if (!position) {
+      return "Zona non specificata";
+    }
+
+    const parts = position
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => part.replace(/\b\d{5}\b/g, "").replace(/\bTN\b/gi, "").trim())
+      .filter(Boolean)
+      .filter((part) => !/\b(italia|italy|provincia autonoma di trento|trentino-alto adige|trentino)\b/i.test(part));
+
+    const likelyComune = parts
+      .slice()
+      .reverse()
+      .find((part) => !/\d/.test(part) && part.length > 2);
+
+    return likelyComune || parts.at(-1) || parts[0] || "Zona non specificata";
+  }
+
+  function getAnnouncementAreaLabel(announcement) {
+    const lat = announcement.coordinate?.latitudine;
+    const lng = announcement.coordinate?.longitudine;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return "Zona non specificata";
+    }
+
+    const area = TRENTINO_CLUSTER_AREAS.find((candidate) =>
+      lat >= candidate.latMin &&
+      lat <= candidate.latMax &&
+      lng >= candidate.lngMin &&
+      lng <= candidate.lngMax
+    );
+
+    const fallbackComune = getAnnouncementComune(announcement);
+    const hasCleanFallback = fallbackComune && fallbackComune !== "Zona non specificata" && !/^\d/.test(fallbackComune);
+
+    return area?.label || (hasCleanFallback ? `Zona ${fallbackComune}` : "Zona non specificata");
+  }
+
+  function getClusterKey(announcement, level) {
+    return level === "area" ? getAnnouncementAreaLabel(announcement) : getAnnouncementComune(announcement);
+  }
+
+  function formatClusterLabel(group, clusterLevel) {
+    if (clusterLevel === "area") {
+      return group.key;
+    }
+
+    return group.key;
+  }
+
+  function createClusterContent(group) {
+    const element = document.createElement("button");
+    element.className = "map-cluster-marker";
+    element.type = "button";
+    element.textContent = String(group.count);
+    element.setAttribute("aria-label", `${group.count} annunci in ${group.label}`);
+    return element;
+  }
+
+  function createAnnouncementClusterMarkers(announcements) {
+    const groups = new Map();
+    const clusterLevel = getClusterLevel();
+
+    announcements.forEach((announcement) => {
+      if (!announcement.coordinate?.latitudine || !announcement.coordinate?.longitudine) {
+        return;
+      }
+
+      const label = getClusterKey(announcement, clusterLevel);
+      const group = groups.get(label) || {
+        key: label,
+        count: 0,
+        latSum: 0,
+        lngSum: 0,
+      };
+
+      group.count += 1;
+      group.latSum += announcement.coordinate.latitudine;
+      group.lngSum += announcement.coordinate.longitudine;
+      groups.set(label, group);
+    });
+
+    return Array.from(groups.values()).map((group) => {
+      group.label = formatClusterLabel(group, clusterLevel);
+      const position = {
+        lat: group.latSum / group.count,
+        lng: group.lngSum / group.count,
+      };
+      const clusterMarker = new google.maps.marker.AdvancedMarkerElement({
+        map: shouldShowAnnouncementClusters() ? map.innerMap : null,
+        position,
+        title: `${group.count} annunci - ${group.label}`,
+        content: createClusterContent(group),
+      });
+      clusterMarker.clusterLevel = clusterLevel;
+
+      const clusterInfoWindow = new google.maps.InfoWindow({
+        content: `<strong>${group.label}</strong><br><span>${group.count} annunci</span>`,
+      });
+
+      clusterMarker.addListener("click", () => {
+        openClusterInfoWindow?.close();
+        clusterInfoWindow.open(map.innerMap, clusterMarker);
+        openClusterInfoWindow = clusterInfoWindow;
+      });
+
+      return clusterMarker;
+    });
   }
 
   function createAnnouncementMarker(announcement) { // crea il marker
@@ -1560,15 +1755,8 @@
       title,
       content: pin.element,
     });
-    const content = [
-      `<strong>${announcement.topic}</strong>`,
-      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
-      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
-    ].filter(Boolean).join("<br>");
-    const infoWindow = new google.maps.InfoWindow({ content });
-
     markerElement.addListener("click", () => {
-      infoWindow.open(map.innerMap, markerElement);
+      mostraDettagliCompleti(announcement);
     });
 
     return markerElement;
@@ -1581,10 +1769,12 @@
 
     const payload = await requestJson("/api/announcements/active");
     clearAnnouncementMarkers();
+    activeAnnouncements = payload.data || [];
 
-    announcementMarkers = (payload.data || [])
+    announcementMarkers = activeAnnouncements
       .filter((announcement) => announcement.coordinate?.latitudine && announcement.coordinate?.longitudine)
       .map(createAnnouncementMarker);
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements);
     updateAnnouncementMarkersVisibility();
   }
 
@@ -1688,7 +1878,7 @@
     document.getElementById('det-id').innerText = annuncio.idAnnuncio;
 
     // appare la finestra
-    document.getElementById('modal-dettaglio').style.display = 'block';
+    document.getElementById('modal-dettaglio').style.display = 'grid';
     renderDetailMap(annuncio);
 
     // blocca lo scroll della pagina sotto
@@ -1701,10 +1891,7 @@
     if (!container) return;
 
     try {
-      const response = await fetch('/api/announcements/active');
-      if (!response.ok) throw new Error(`Errore server: ${response.status}`);
-
-      const payload = await response.json();
+      const payload = await requestJson('/api/announcements/active');
       const annunciArray = payload.data || [];
 
       container.innerHTML = ''; // Svuota la lista prima di riempirla

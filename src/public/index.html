@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>RoadEye</title>
-    <link rel="stylesheet" href="/styles.css?v=20260513-roads">
+    <link rel="stylesheet" href="/styles.css?v=0.1.0">
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/@googlemaps/extended-component-library/0.6.11/index.min.js"></script>
-    <script defer src="/app.js?v=20260513-roads"></script>
+    <script defer src="/app.js?v=0.1.0"></script>
   </head>
   <body>
     <div class="phone-app">
@@ -68,12 +68,9 @@
       <div class="lista-annunci"></div>
     </section>
     
-    <div id="modal-dettaglio"
-      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:10000;">
-      <div
-        style="background:white; margin:10% auto; padding:20px; width:80%; max-width:500px; color:black; border-radius:10px; position: relative;">
-        <button onclick="chiudiDettaglio()"
-          style="float: right; padding: 5px 10px; cursor: pointer; background: #000000; color: white; border: none; border-radius: 4px;">
+    <div class="detail-modal" id="modal-dettaglio">
+      <div class="detail-modal-panel">
+        <button class="detail-modal-close" onclick="chiudiDettaglio()" type="button">
           Chiudi
         </button>
     

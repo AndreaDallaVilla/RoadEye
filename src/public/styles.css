@@ -242,10 +242,71 @@ gmp-map {
   color: var(--accent);
 }
 
+.map-cluster-marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 5px rgba(20, 20, 20, 0.24);
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.8);
+  padding: clamp(12px, 4vh, 32px) 12px;
+}
+
+.detail-modal-panel {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 560px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 14px;
+}
+
+.detail-modal-close {
+  justify-self: end;
+  min-height: 34px;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 5px 10px;
+  font-weight: 800;
+}
+
+.detail-modal-panel h2,
+.detail-modal-panel p {
+  margin: 0;
+}
+
+.detail-modal-panel p {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .detail-map {
   width: 100%;
-  height: min(44vh, 320px);
-  min-height: 220px;
+  height: clamp(190px, 34vh, 300px);
+  min-height: 0;
   margin: 10px 0 12px;
   border: 2px solid var(--line);
   background: var(--soft);
@@ -874,6 +935,20 @@ gmp-map {
   .brand-logo {
     width: clamp(48px, 14vw, 58px);
     height: clamp(48px, 14vw, 58px);
+  }
+
+  .detail-modal {
+    padding: 8px;
+  }
+
+  .detail-modal-panel {
+    max-height: calc(100vh - 16px);
+    padding: 10px;
+  }
+
+  .detail-map {
+    height: 190px;
+    margin: 8px 0;
   }
 
   .gdpr-consent {
