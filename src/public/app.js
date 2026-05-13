@@ -1642,12 +1642,24 @@
       return "Zona non specificata";
     }
 
+    const cleanLocationPart = (part) =>
+      part
+        .replace(/\b[A-Z0-9]{2,4}\+[A-Z0-9]{2,4}\b/gi, "")
+        .replace(/\b\d{5}\b/g, "")
+        .replace(/\b(TN|BZ)\b/gi, "")
+        .replace(/^[\d\s:/.-]+/, "")
+        .replace(/\s+/g, " ")
+        .trim();
     const parts = position
       .split(",")
       .map((part) => part.trim())
       .filter(Boolean)
-      .map((part) => part.replace(/\b\d{5}\b/g, "").replace(/\bTN\b/gi, "").trim())
+      .map(cleanLocationPart)
       .filter(Boolean)
+      .filter((part) => !/^\d/.test(part))
+      .filter((part) => !/[A-Z0-9]{2,4}\+[A-Z0-9]{2,4}/i.test(part))
+      .filter((part) => !/^[A-Z]{1,3}$/i.test(part))
+      .filter((part) => /[a-zàèéìòù]/i.test(part))
       .filter((part) => !/\b(italia|italy|provincia autonoma di trento|trentino-alto adige|trentino)\b/i.test(part));
 
     const likelyComune = parts
@@ -1673,7 +1685,7 @@
       lng <= candidate.lngMax
     );
 
-    const fallbackComune = getAnnouncementComune(announcement);
+    const fallbackComune = getAnnouncementComune(announcement).replace(/^[\d\s:/.-]+/, "").trim();
     const hasCleanFallback = fallbackComune && fallbackComune !== "Zona non specificata" && !/^\d/.test(fallbackComune);
 
     return area?.label || (hasCleanFallback ? `Zona ${fallbackComune}` : "Zona non specificata");
@@ -1695,7 +1707,7 @@
     const element = document.createElement("button");
     element.className = "map-cluster-marker";
     element.type = "button";
-    element.innerHTML = `<strong>${group.count}</strong><span>${group.label}</span>`;
+    element.textContent = String(group.count);
     element.setAttribute("aria-label", `${group.count} annunci in ${group.label}`);
     return element;
   }
@@ -1750,7 +1762,11 @@
       });
       clusterMarker.clusterLevel = clusterLevel;
 
+      const clusterInfoWindow = new google.maps.InfoWindow({
+        content: `<strong>${group.label}</strong><br><span>${group.count} annunci</span>`,
+      });
       let lastClusterDrillAt = 0;
+      let lastClusterTapAt = 0;
 
       function drillDownCluster() {
         const now = Date.now();
@@ -1790,6 +1806,12 @@
         }
       }
 
+      function openClusterSummary() {
+        openClusterInfoWindow?.close();
+        clusterInfoWindow.open(map.innerMap, clusterMarker);
+        openClusterInfoWindow = clusterInfoWindow;
+      }
+
       clusterContent.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1797,7 +1819,13 @@
       clusterContent.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        drillDownCluster();
+
+        if (event.detail >= 2) {
+          drillDownCluster();
+          return;
+        }
+
+        openClusterSummary();
       });
       clusterContent.addEventListener("dblclick", (event) => {
         event.preventDefault();
@@ -1805,9 +1833,18 @@
         drillDownCluster();
       });
       clusterContent.addEventListener("touchend", (event) => {
+        const now = Date.now();
         event.preventDefault();
         event.stopPropagation();
-        drillDownCluster();
+
+        if (now - lastClusterTapAt < 360) {
+          drillDownCluster();
+          lastClusterTapAt = 0;
+          return;
+        }
+
+        lastClusterTapAt = now;
+        openClusterSummary();
       });
 
       return clusterMarker;
