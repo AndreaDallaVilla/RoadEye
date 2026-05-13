@@ -64,6 +64,9 @@
   let mapSearchAutocomplete = null;
   let reportPositionAutocomplete = null;
   let birthPlaceAutocomplete = null;
+  let clientMapConfig = null;
+  let detailMap = null;
+  let detailMapMarker = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
@@ -292,6 +295,35 @@
     };
   }
 
+  async function findNearestRoad(location) {
+    const normalizedLocation = getPlainLocation(location);
+
+    if (!normalizedLocation) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      latitudine: String(normalizedLocation.lat),
+      longitudine: String(normalizedLocation.lng),
+      distanzaMassimaMetri: "35",
+    });
+
+    return requestJson(`/api/maps/nearest-road?${params.toString()}`);
+  }
+
+  async function requireRoadLocation(location) {
+    const roadResult = await findNearestRoad(location);
+
+    if (!roadResult?.suStrada || !roadResult.coordinate) {
+      throw new Error(roadResult?.messaggio || "Seleziona un punto su una strada.");
+    }
+
+    return {
+      lat: roadResult.coordinate.latitudine,
+      lng: roadResult.coordinate.longitudine,
+    };
+  }
+
   async function geocodeTrentinoAddress(address) {
     const normalizedAddress = typeof address === "string" ? address.trim() : "";
 
@@ -380,7 +412,7 @@
     selectionInfoWindow?.close();
   }
 
-  function handleReportPlaceSelection(place, infowindow) {
+  async function handleReportPlaceSelection(place, infowindow) {
     const location = place.geometry?.location;
 
     if (!location) {
@@ -404,12 +436,26 @@
       return;
     }
 
+    let roadLocation;
+
+    try {
+      roadLocation = await requireRoadLocation(location);
+    } catch (error) {
+      selectedPlace = null;
+      selectedLocation = null;
+      reportLatitude.value = "";
+      reportLongitude.value = "";
+      setStatus(error.message, "error");
+      updateSelectionMarkerVisibility();
+      return;
+    }
+
     selectedPlace = place;
-    setSelectedLocation(location, place.formatted_address || place.name || formatCoordinates(location));
+    setSelectedLocation(roadLocation, place.formatted_address || place.name || formatCoordinates(roadLocation));
 
-    moveMapToLocation(location, place.geometry.viewport);
+    moveMapToLocation(roadLocation, place.geometry.viewport);
 
-    marker.position = getPlainLocation(location);
+    marker.position = roadLocation;
     setStatus("Luogo selezionato", "ready");
 
     infowindow.setContent(
@@ -697,6 +743,19 @@
       }
 
       setSelectedLocation(geocoded.location, geocoded.address || typedAddress);
+    }
+
+    try {
+      const roadLocation = await requireRoadLocation({
+        lat: Number(reportLatitude.value),
+        lng: Number(reportLongitude.value),
+      });
+      const currentAddress = reportPosition.value.trim();
+      setSelectedLocation(roadLocation, currentAddress || formatCoordinates(roadLocation));
+      updateSelectionMarkerVisibility();
+    } catch (error) {
+      window.alert(error.message || "Seleziona un punto su una strada.");
+      return;
     }
 
     const payload = buildAnnouncementPayload(form, gravita);
@@ -1379,6 +1438,7 @@
   async function initMap() { // gestione della mappa 
     try {
       const config = await requestJson("/api/maps/client-config");
+      clientMapConfig = config;
       allowedBounds = config.bounds;
       createApiLoader(config);
 
@@ -1442,20 +1502,27 @@
         }
 
         marker.position = location;
-        setStatus("Ricerca indirizzo...", "ready");
+        setStatus("Verifica strada...", "ready");
 
         try {
-          const address = await reverseGeocodeLocation(location);
-          selectedPlace = { location };
-          setSelectedLocation(location, address || formatCoordinates(location));
+          const roadLocation = await requireRoadLocation(location);
+          const address = await reverseGeocodeLocation(roadLocation);
+          selectedPlace = { location: roadLocation };
+          setSelectedLocation(roadLocation, address || formatCoordinates(roadLocation));
           setStatus("Luogo selezionato", "ready");
+          marker.position = roadLocation;
 
           infowindow.setContent(
             `<strong>Luogo selezionato</strong><br><span>${reportPosition.value}</span>`,
           );
           infowindow.open(map.innerMap, marker);
         } catch (error) {
-          setSelectedLocation(location, formatCoordinates(location));
+          selectedPlace = null;
+          selectedLocation = null;
+          reportLatitude.value = "";
+          reportLongitude.value = "";
+          reportPosition.value = "";
+          marker.position = null;
           setStatus(error.message, "error");
         }
       });
@@ -1548,6 +1615,69 @@
     container.appendChild(div);
   }
 
+  function renderDetailMap(announcement) {
+    const mapElement = document.getElementById('det-map');
+    const location = getPlainLocation(announcement.coordinate);
+
+    if (!mapElement) {
+      return;
+    }
+
+    if (!location || typeof google === "undefined" || !google.maps?.Map) {
+      mapElement.hidden = true;
+      return;
+    }
+
+    mapElement.hidden = false;
+
+    window.setTimeout(() => {
+      const mapOptions = {
+        center: location,
+        zoom: 17,
+        clickableIcons: false,
+        fullscreenControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+      };
+
+      if (clientMapConfig?.mapId) {
+        mapOptions.mapId = clientMapConfig.mapId;
+      }
+
+      if (!detailMap) {
+        detailMap = new google.maps.Map(mapElement, mapOptions);
+      } else {
+        detailMap.setOptions(mapOptions);
+        detailMap.setCenter(location);
+        detailMap.setZoom(17);
+      }
+
+      if (!detailMapMarker && google.maps.marker?.AdvancedMarkerElement) {
+        detailMapMarker = new google.maps.marker.AdvancedMarkerElement({
+          map: detailMap,
+          position: location,
+          title: announcement.topic || "Posizione annuncio",
+        });
+      } else if (!detailMapMarker && google.maps.Marker) {
+        detailMapMarker = new google.maps.Marker({
+          map: detailMap,
+          position: location,
+          title: announcement.topic || "Posizione annuncio",
+        });
+      } else if (detailMapMarker) {
+        if ("position" in detailMapMarker) {
+          detailMapMarker.map = detailMap;
+          detailMapMarker.position = location;
+        } else if (typeof detailMapMarker.setMap === "function") {
+          detailMapMarker.setMap(detailMap);
+          detailMapMarker.setPosition(location);
+        }
+
+        detailMapMarker.title = announcement.topic || "Posizione annuncio";
+      }
+    }, 0);
+  }
+
   function mostraDettagliCompleti(annuncio) { // funzione per aprire una finestra con i dati estesi
     // inserisce i dati dell'annuncio cliccato nei campi della Modal
     document.getElementById('det-topic').innerText = annuncio.topic;
@@ -1559,6 +1689,7 @@
 
     // appare la finestra
     document.getElementById('modal-dettaglio').style.display = 'block';
+    renderDetailMap(annuncio);
 
     // blocca lo scroll della pagina sotto
     document.body.style.overflow = 'hidden';

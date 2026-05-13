@@ -18,6 +18,15 @@ async function reverseGeocode(req, res, next) {
   }
 }
 
+async function nearestRoad(req, res, next) {
+  try {
+    const result = await mapsService.trovaStradaVicina(req.query);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 function getEmbedUrl(req, res, next) {
   try {
     const result = mapsService.creaEmbedUrl(req.query);
@@ -40,5 +49,6 @@ module.exports = {
   geocode,
   getClientConfig,
   getEmbedUrl,
+  nearestRoad,
   reverseGeocode,
 };

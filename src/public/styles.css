@@ -242,6 +242,15 @@ gmp-map {
   color: var(--accent);
 }
 
+.detail-map {
+  width: 100%;
+  height: min(44vh, 320px);
+  min-height: 220px;
+  margin: 10px 0 12px;
+  border: 2px solid var(--line);
+  background: var(--soft);
+}
+
 .news-box,
 .wire-form,
 .category-grid,

@@ -16,6 +16,17 @@ const reverseGeocodeQuerySchema = Joi.object({
   .or("latitudine", "lat")
   .or("longitudine", "lng", "lon");
 
+const nearestRoadQuerySchema = Joi.object({
+  latitudine: Joi.number().min(-90).max(90).optional(),
+  lat: Joi.number().min(-90).max(90).optional(),
+  longitudine: Joi.number().min(-180).max(180).optional(),
+  lng: Joi.number().min(-180).max(180).optional(),
+  lon: Joi.number().min(-180).max(180).optional(),
+  distanzaMassimaMetri: Joi.number().min(1).max(100).optional(),
+})
+  .or("latitudine", "lat")
+  .or("longitudine", "lng", "lon");
+
 const embedUrlQuerySchema = Joi.object({
   query: text({ max: 300 }).optional(),
   indirizzo: text({ max: 300 }).optional(),
@@ -33,5 +44,6 @@ const embedUrlQuerySchema = Joi.object({
 module.exports = {
   embedUrlQuerySchema,
   geocodeQuerySchema,
+  nearestRoadQuerySchema,
   reverseGeocodeQuerySchema,
 };

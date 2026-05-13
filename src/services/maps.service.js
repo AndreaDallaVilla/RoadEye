@@ -1,6 +1,7 @@
 const createHttpError = require("../utils/httpError");
 
 const GEOCODING_BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
+const ROADS_NEAREST_BASE_URL = "https://roads.googleapis.com/v1/nearestRoads";
 const EMBED_BASE_URL = "https://www.google.com/maps/embed/v1";
 const DEFAULT_LANGUAGE = process.env.GOOGLE_MAPS_LANGUAGE || "it";
 const DEFAULT_REGION = process.env.GOOGLE_MAPS_REGION || "it";
@@ -150,6 +151,74 @@ async function geocodificaInversa(payload) {
   return chiamaGeocodingApi({ latlng: `${latitudine},${longitudine}` });
 }
 
+function calcolaDistanzaMetri(a, b) {
+  const earthRadiusMeters = 6371000;
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const deltaLat = toRadians(b.latitudine - a.latitudine);
+  const deltaLng = toRadians(b.longitudine - a.longitudine);
+  const lat1 = toRadians(a.latitudine);
+  const lat2 = toRadians(b.latitudine);
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+async function trovaStradaVicina(payload) {
+  const latitudine = normalizzaNumero(
+    payload.latitudine ?? payload.lat,
+    "Latitudine",
+  );
+  const longitudine = normalizzaNumero(
+    payload.longitudine ?? payload.lng ?? payload.lon,
+    "Longitudine",
+  );
+  const distanzaMassimaMetri = payload.distanzaMassimaMetri
+    ? normalizzaNumero(payload.distanzaMassimaMetri, "Distanza massima")
+    : 35;
+
+  assertCoordinate(latitudine, longitudine);
+
+  const apiKey = getGoogleMapsServerApiKey();
+  const url = new URL(ROADS_NEAREST_BASE_URL);
+  url.searchParams.set("key", apiKey);
+  url.searchParams.set("points", `${latitudine},${longitudine}`);
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw createHttpError(502, "Google Roads API non raggiungibile");
+  }
+
+  const roadsPayload = await response.json();
+  const snappedPoint = roadsPayload.snappedPoints?.[0];
+
+  if (!snappedPoint?.location) {
+    return {
+      suStrada: false,
+      messaggio: "Seleziona un punto su una strada.",
+    };
+  }
+
+  const puntoOriginale = { latitudine, longitudine };
+  const puntoStrada = {
+    latitudine: snappedPoint.location.latitude,
+    longitudine: snappedPoint.location.longitude,
+  };
+  const distanzaMetri = calcolaDistanzaMetri(puntoOriginale, puntoStrada);
+  const suStrada = distanzaMetri <= distanzaMassimaMetri;
+
+  return {
+    suStrada,
+    distanzaMetri,
+    distanzaMassimaMetri,
+    placeId: snappedPoint.placeId,
+    coordinate: puntoStrada,
+    messaggio: suStrada ? "Punto valido su strada." : "Seleziona un punto piu' vicino a una strada.",
+  };
+}
+
 function creaEmbedUrl(payload) {
   const apiKey = getGoogleMapsServerApiKey();
   const query = normalizzaTesto(payload.query || payload.indirizzo || payload.address);
@@ -209,4 +278,5 @@ module.exports = {
   creaEmbedUrl,
   geocodificaIndirizzo,
   geocodificaInversa,
+  trovaStradaVicina,
 };
