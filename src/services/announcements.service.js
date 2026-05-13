@@ -1,26 +1,64 @@
 // Gestisce la business logic
 
+const mongoose = require("mongoose");
+
 const Annuncio = require('../models/Announcements');
 const PublicEntity = require("../models/PublicEntity");
 const User = require("../models/User");
 
+const ANNOUNCEMENT_COUNTER_ID = "annunci.idAnnuncio";
+const ANNOUNCEMENT_COUNTER_COLLECTION = "counters";
+const ANNOUNCEMENT_CODE_BLOCK_SIZE = 10000;
+
 // permette creare l’oggetto annuncio con i relativi attributi
 exports.creaAnnuncio = async function (datiAnnuncio) {
-    // si ordina per idAnnuncio in modo descrescente che sarebeb il -1 per riuscire a prendere l'id più alto
-    const ultimoAnnuncio = await Annuncio.findOne().sort({ idAnnuncio: -1 });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const nuovoCodice = await generaProssimoIdAnnuncio();
+        const annuncio = new Annuncio({
+            ...datiAnnuncio,
+            idAnnuncio: nuovoCodice
+        });
 
-    
-    // Se il database è vuoto, partiamo da 'aa0000'
-    const ultimoCodice = ultimoAnnuncio ? ultimoAnnuncio.idAnnuncio : "aa0000";
-    const nuovoCodice = incrementaCodice(ultimoCodice);
+        try {
+            return await annuncio.save();
+        } catch (error) {
+            if (error?.code !== 11000 || !error?.keyPattern?.idAnnuncio || attempt === 2) {
+                throw error;
+            }
+        }
+    }
 
-    const annuncio = new Annuncio({
-        ...datiAnnuncio,
-        idAnnuncio: nuovoCodice
-    });
+}
 
-    return await annuncio.save();
+async function generaProssimoIdAnnuncio() {
+    await inizializzaContatoreAnnunci();
 
+    const counter = await mongoose.connection.collection(ANNOUNCEMENT_COUNTER_COLLECTION).findOneAndUpdate(
+        { _id: ANNOUNCEMENT_COUNTER_ID },
+        { $inc: { seq: 1 } },
+        { returnDocument: "after" },
+    );
+
+    const updatedCounter = counter.value || counter;
+    return sequenzaACodice(updatedCounter.seq);
+}
+
+async function inizializzaContatoreAnnunci() {
+    const collection = mongoose.connection.collection(ANNOUNCEMENT_COUNTER_COLLECTION);
+    const existingCounter = await collection.findOne({ _id: ANNOUNCEMENT_COUNTER_ID });
+
+    if (existingCounter) {
+        return;
+    }
+
+    const ultimoAnnuncio = await Annuncio.findOne().sort({ idAnnuncio: -1 }).select("idAnnuncio").lean();
+    const ultimaSequenza = ultimoAnnuncio ? codiceASequenza(ultimoAnnuncio.idAnnuncio) : 0;
+
+    await collection.updateOne(
+        { _id: ANNOUNCEMENT_COUNTER_ID },
+        { $setOnInsert: { seq: ultimaSequenza } },
+        { upsert: true },
+    );
 }
 
 exports.listaAnnunciAttivi = async function () {
@@ -141,37 +179,31 @@ exports.calcolaPriorita = function() {
 
 // funzione non segnata in nessun deliverable, ma puo essere utile per gestire l'idAnnuncio
 // al momento non c'è nulla che controlla l'idAnnuncio
-function incrementaCodice(codice) {
-
-    // regex per estrarre le prime due lettere e le ultime quattro cifre
-    let prefix = codice.substring(0, 2);
-    let number = parseInt(codice.substring(2), 10);
-
-    // si incrementa il numero
-    number++;
-
-    // se si supera 9999 bisogna aggiornare la parte alfanumerica
-    if (number > 9999) {
-        number = 0; // si resetta il numero
-        
-        // si incrementa la parte alfabetica
-        let charCode1 = prefix.charCodeAt(0);
-        let charCode2 = prefix.charCodeAt(1);
-
-        charCode2++; // si incrementa l'ultima lettera (es. 'r' -> 's')
-
-        if (charCode2 > 122) { // 122 è 'z' in ASCII
-            charCode2 = 97;    // Torna ad 'a'
-            charCode1++;       // Incrementa la prima lettera
-        }
-        
-        prefix = String.fromCharCode(charCode1, charCode2);
+function codiceASequenza(codice) {
+    if (!/^[a-z]{2}[0-9]{4}$/.test(codice || "")) {
+        return 0;
     }
 
-    // si formatta il numero per avere sempre 4 cifre (es. 1 -> 0001)
-    let numberStr = number.toString().padStart(4, '0');
+    const prefixIndex =
+        (codice.charCodeAt(0) - 97) * 26 +
+        (codice.charCodeAt(1) - 97);
+    const number = parseInt(codice.substring(2), 10);
 
-    return prefix + numberStr; // si uniscono le due parti 
+    return prefixIndex * ANNOUNCEMENT_CODE_BLOCK_SIZE + number;
+}
+
+function sequenzaACodice(sequence) {
+    const prefixIndex = Math.floor(sequence / ANNOUNCEMENT_CODE_BLOCK_SIZE);
+    const number = sequence % ANNOUNCEMENT_CODE_BLOCK_SIZE;
+    const firstCharIndex = Math.floor(prefixIndex / 26);
+    const secondCharIndex = prefixIndex % 26;
+
+    if (firstCharIndex > 25) {
+        throw new Error("Spazio idAnnuncio esaurito");
+    }
+
+    const prefix = String.fromCharCode(97 + firstCharIndex, 97 + secondCharIndex);
+    return `${prefix}${String(number).padStart(4, "0")}`;
 }
 /*
     idAnnuncio: { 
