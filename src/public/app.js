@@ -1695,7 +1695,7 @@
     const element = document.createElement("button");
     element.className = "map-cluster-marker";
     element.type = "button";
-    element.textContent = String(group.count);
+    element.innerHTML = `<strong>${group.count}</strong><span>${group.label}</span>`;
     element.setAttribute("aria-label", `${group.count} annunci in ${group.label}`);
     return element;
   }
