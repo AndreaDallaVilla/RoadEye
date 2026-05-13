@@ -51,6 +51,9 @@
   const severityRange = document.querySelector("#severity-range"); // gestione della gravità
   const severityLabel = document.querySelector("#severity-label"); // gestione della gravità
   const headerSectionTitle = document.querySelector("#header-section-title"); // cambiare il titolo in alto nella pagina dinamicamente
+  const bottomHomeSubmit = document.querySelector("#bottom-home-submit");
+  const bottomPrimaryAction = document.querySelector("#bottom-primary-action");
+  const appToast = document.querySelector("#app-toast");
 
   const viewTitles = { // visione di titoli 
     home: "Home",
@@ -73,6 +76,7 @@
   let currentReportStep = "topic";
   let publicEntities = [];
   let pendingReportForm = null;
+  let appToastTimer = null;
   let pendingRegistrationPayload = null;
   const otpCooldownTimers = new Map();
   let announcementMarkers = [];
@@ -676,8 +680,8 @@
 
   function showView(viewName) {
     if (viewName === "report" && !getToken()) {
-      window.alert("Devi effettuare l'accesso per creare un annuncio.");
       drawer.classList.remove("open");
+      showAppToast("Devi effettuare l'accesso per creare un annuncio.", 2000);
       showAuth("login");
       return;
     }
@@ -701,6 +705,7 @@
       moveMapPanel("home");
     }
 
+    updateBottomActions();
     drawer.classList.remove("open");
   }
 
@@ -711,6 +716,60 @@
     reportTopicStep.classList.toggle("active", isTopicStep);
     reportForm.classList.toggle("active", !isTopicStep);
     moveMapPanel(isTopicStep ? "home" : "report");
+    updateBottomActions();
+  }
+
+  function isReportDetailsStep() {
+    return currentView === "report" && currentReportStep === "details";
+  }
+
+  function updateBottomActions() {
+    if (!bottomHomeSubmit || !bottomPrimaryAction) {
+      return;
+    }
+
+    const reportDetailsActive = isReportDetailsStep();
+
+    bottomHomeSubmit.textContent = reportDetailsActive ? "Invio" : "HOME";
+    bottomHomeSubmit.dataset.view = reportDetailsActive ? "" : "home";
+    bottomHomeSubmit.classList.toggle("submit-mode", reportDetailsActive);
+    bottomHomeSubmit.setAttribute("aria-label", reportDetailsActive ? "Invia annuncio" : "Vai alla home");
+
+    bottomPrimaryAction.innerHTML = reportDetailsActive
+      ? '<svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2"/><path d="M6.5 10.5V20h11v-9.5"/><path d="M10 20v-5h4v5"/></svg>'
+      : "+";
+    bottomPrimaryAction.dataset.view = reportDetailsActive ? "home" : "report";
+    bottomPrimaryAction.classList.toggle("home-mode", reportDetailsActive);
+    bottomPrimaryAction.setAttribute("aria-label", reportDetailsActive ? "Torna alla home" : "Crea annuncio");
+  }
+
+  function showAppToast(message, duration = 2000) {
+    if (!appToast) {
+      return Promise.resolve();
+    }
+
+    if (appToastTimer) {
+      window.clearTimeout(appToastTimer);
+    }
+
+    appToast.replaceChildren();
+    const dialog = document.createElement("div");
+    const text = document.createElement("p");
+    dialog.className = "toast-dialog";
+    text.textContent = message;
+    dialog.append(text);
+    appToast.append(dialog);
+    appToast.hidden = false;
+    appToast.classList.add("visible");
+
+    return new Promise((resolve) => {
+      appToastTimer = window.setTimeout(() => {
+        appToast.classList.remove("visible");
+        appToast.hidden = true;
+        appToastTimer = null;
+        resolve();
+      }, duration);
+    });
   }
 
   function moveMapPanel(target) {
@@ -806,6 +865,10 @@
       body: JSON.stringify(payload),
     });
 
+    if (severityDialog.open) {
+      severityDialog.close();
+    }
+
     form.reset();
     selectedPlace = null;
     selectedLocation = null;
@@ -815,7 +878,7 @@
     showReportStep("topic");
     await loadActiveAnnouncements();
     await aggiornaListaTestualeAnnunci();
-    window.alert("Annuncio pubblicato.");
+    await showAppToast("Annuncio creato", 2000);
     showView("home");
   }
 
@@ -1234,7 +1297,16 @@
     });
 
     document.querySelectorAll("[data-view]").forEach((button) => {
-      button.addEventListener("click", () => showView(button.dataset.view));
+      button.addEventListener("click", () => {
+        if (button === bottomHomeSubmit && isReportDetailsStep()) {
+          reportForm.requestSubmit();
+          return;
+        }
+
+        if (button.dataset.view) {
+          showView(button.dataset.view);
+        }
+      });
     });
 
     document.querySelectorAll("[data-open-auth]").forEach((button) => {
@@ -1303,7 +1375,9 @@
       try {
         await publishAnnouncement(pendingReportForm, getSelectedSeverity());
         pendingReportForm = null;
-        severityDialog.close();
+        if (severityDialog.open) {
+          severityDialog.close();
+        }
       } catch (error) {
         window.alert(error.message);
       }
