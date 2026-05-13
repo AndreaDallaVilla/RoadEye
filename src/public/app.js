@@ -1502,6 +1502,7 @@
         mapTypeControl: false,
         streetViewControl: false,
         clickableIcons: false,
+        disableDoubleClickZoom: true,
         restriction: {
           latLngBounds: config.bounds,
           strictBounds: false,
@@ -1575,6 +1576,10 @@
       });
       map.innerMap.addListener("zoom_changed", updateAnnouncementMarkersVisibility);
       map.innerMap.addListener("zoom_changed", refreshAnnouncementClusters);
+      map.innerMap.addListener("idle", () => {
+        refreshAnnouncementClusters();
+        updateAnnouncementMarkersVisibility();
+      });
 
       await loadActiveAnnouncements();
       setStatus("Mappa pronta", "ready");
@@ -1603,7 +1608,7 @@
     announcementClusterMarkers = [];
   }
 
-  function refreshAnnouncementClusters() {
+  function refreshAnnouncementClusters(force = false) {
     if (!activeAnnouncements.length || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
       return;
     }
@@ -1611,12 +1616,22 @@
     const previousLevel = announcementClusterMarkers[0]?.clusterLevel;
     const nextLevel = getClusterLevel();
 
-    if (previousLevel === nextLevel) {
+    if (!force && previousLevel === nextLevel) {
       return;
     }
 
     clearAnnouncementClusterMarkers();
     announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements);
+    updateAnnouncementMarkersVisibility();
+  }
+
+  function rebuildAnnouncementClusters(clusterLevel) {
+    if (!activeAnnouncements.length || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    clearAnnouncementClusterMarkers();
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements, clusterLevel);
     updateAnnouncementMarkersVisibility();
   }
 
@@ -1685,9 +1700,9 @@
     return element;
   }
 
-  function createAnnouncementClusterMarkers(announcements) {
+  function createAnnouncementClusterMarkers(announcements, forcedClusterLevel) {
     const groups = new Map();
-    const clusterLevel = getClusterLevel();
+    const clusterLevel = forcedClusterLevel || getClusterLevel();
 
     announcements.forEach((announcement) => {
       if (!announcement.coordinate?.latitudine || !announcement.coordinate?.longitudine) {
@@ -1700,11 +1715,23 @@
         count: 0,
         latSum: 0,
         lngSum: 0,
+        minLat: Infinity,
+        maxLat: -Infinity,
+        minLng: Infinity,
+        maxLng: -Infinity,
+        announcements: [],
       };
 
       group.count += 1;
-      group.latSum += announcement.coordinate.latitudine;
-      group.lngSum += announcement.coordinate.longitudine;
+      const lat = announcement.coordinate.latitudine;
+      const lng = announcement.coordinate.longitudine;
+      group.latSum += lat;
+      group.lngSum += lng;
+      group.minLat = Math.min(group.minLat, lat);
+      group.maxLat = Math.max(group.maxLat, lat);
+      group.minLng = Math.min(group.minLng, lng);
+      group.maxLng = Math.max(group.maxLng, lng);
+      group.announcements.push(announcement);
       groups.set(label, group);
     });
 
@@ -1714,22 +1741,73 @@
         lat: group.latSum / group.count,
         lng: group.lngSum / group.count,
       };
+      const clusterContent = createClusterContent(group);
       const clusterMarker = new google.maps.marker.AdvancedMarkerElement({
         map: shouldShowAnnouncementClusters() ? map.innerMap : null,
         position,
         title: `${group.count} annunci - ${group.label}`,
-        content: createClusterContent(group),
+        content: clusterContent,
       });
       clusterMarker.clusterLevel = clusterLevel;
 
-      const clusterInfoWindow = new google.maps.InfoWindow({
-        content: `<strong>${group.label}</strong><br><span>${group.count} annunci</span>`,
-      });
+      let lastClusterDrillAt = 0;
 
-      clusterMarker.addListener("click", () => {
+      function drillDownCluster() {
+        const now = Date.now();
+
+        if (now - lastClusterDrillAt < 220) {
+          return;
+        }
+
+        lastClusterDrillAt = now;
         openClusterInfoWindow?.close();
-        clusterInfoWindow.open(map.innerMap, clusterMarker);
-        openClusterInfoWindow = clusterInfoWindow;
+        openClusterInfoWindow = null;
+        const targetZoom = clusterLevel === "area" ? AREA_CLUSTER_MAX_ZOOM + 1 : ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+        const centerOfGroup = {
+          lat: group.latSum / group.count,
+          lng: group.lngSum / group.count,
+        };
+        const markerLocation = getPlainLocation(clusterMarker.position) || position;
+        const targetCenter = clusterLevel === "area" ? markerLocation : centerOfGroup;
+
+        map.innerMap.setCenter(targetCenter);
+        map.innerMap.setZoom(targetZoom);
+
+        if (clusterLevel === "area") {
+          rebuildAnnouncementClusters("comune");
+          return;
+        }
+
+        const refreshAfterMove = () => {
+          clearAnnouncementClusterMarkers();
+          updateAnnouncementMarkersVisibility();
+        };
+
+        if (google.maps.event?.addListenerOnce) {
+          google.maps.event.addListenerOnce(map.innerMap, "idle", refreshAfterMove);
+        } else {
+          window.setTimeout(refreshAfterMove, 0);
+        }
+      }
+
+      clusterContent.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      clusterContent.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        drillDownCluster();
+      });
+      clusterContent.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        drillDownCluster();
+      });
+      clusterContent.addEventListener("touchend", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        drillDownCluster();
       });
 
       return clusterMarker;
