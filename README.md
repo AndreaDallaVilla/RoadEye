@@ -1,12 +1,31 @@
-# RoadEye API Versions
+# RoadEye 
 
-Questo branch contiene solo la documentazione versionata delle API RoadEye.
+**Members of the project:**
+- Francesca Bassi  ID 247688
+- Lorenzo Vadacca  ID 256374
+- Andrea Dalla Villa  ID 242637
+  
+**Group Number:** 16
 
-## Versioni disponibili
+## Documentation
+
+- [first pitch](https://github.com/user-attachments/files/26598485/16.pptx)
+
+- [requirements, use cases, bpmn, actors, swot analysis and mockup](https://github.com/user-attachments/files/26598473/first_deliverable_group_16.pdf)
+
+- [components diagram, class diagram, OCL](https://github.com/user-attachments/files/26927559/second.deliverable.pdf)
+
+
+## Versions
 
 - [v0.1.1](versions/v0.1.1/openapi.yaml)
 
 ## Branch
 
-- `main`: specifiche OpenAPI versionate
-- `devel`: codice sorgente dell'applicazione
+- `main`:  OpenAPI versions
+- `devel`: web/app code
+- 'test': testing
+
+
+
+Copyright(c)2026AndreaDallaVillaLOrenzoVadaccaFrancescaBassi
