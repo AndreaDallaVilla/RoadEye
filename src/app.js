@@ -19,7 +19,17 @@ app.use((req, res, next) => {
   // Content Security Policy - rigoroso
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    [
+      "default-src 'self'",
+      "script-src 'self' https://ajax.googleapis.com https://maps.googleapis.com https://maps.gstatic.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' data: https:",
+      "font-src 'self' https://fonts.gstatic.com",
+      "connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; "),
   );
   
   // Prevent MIME type sniffing
@@ -50,6 +60,7 @@ if (allowedOrigins.length === 0) {
 
 app.use(
   cors({
+      origin: process.env.CLIENT_URL || "*",
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
