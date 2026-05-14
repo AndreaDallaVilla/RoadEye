@@ -29,6 +29,16 @@ const {
   getOtpExpiryDate,
   hashOtpCode,
 } = require("../utils/emailOtp");
+const {
+  isAccountLocked,
+  getAccountLockedErrorMessage,
+  registraLoginFallito,
+  azzeraLoginFalliti,
+} = require("../utils/accountLockout");
+const {
+  logSecurityEvent,
+  SECURITY_EVENTS,
+} = require("../utils/securityAudit");
 
 const OTP_PURPOSES = Object.freeze({
   EMAIL_VERIFICATION: "email-verification",
@@ -413,20 +423,74 @@ async function loginUser(payload) {
     throw createHttpError(400, "La password è obbligatoria");
   }
 
-  const utente = await trovaUtentePerLogin(payload);
+  // Unified error message per security
+  const CREDENZIALI_NON_VALIDE = "Credenziali non valide";
+
+  let utente;
+  try {
+    utente = await trovaUtentePerLogin(payload);
+  } catch (error) {
+    // Se trovaUtentePerLogin lancia errore, ritorna unified message
+    logSecurityEvent({
+      type: SECURITY_EVENTS.LOGIN_FAILED,
+      reason: "invalid_credentials",
+      ip: payload._ipAddress,
+    });
+    throw createHttpError(401, CREDENZIALI_NON_VALIDE);
+  }
 
   if (!utente) {
-    throw createHttpError(401, "Credenziali non valide");
+    logSecurityEvent({
+      type: SECURITY_EVENTS.LOGIN_FAILED,
+      reason: "user_not_found",
+      ip: payload._ipAddress,
+    });
+    throw createHttpError(401, CREDENZIALI_NON_VALIDE);
+  }
+
+  // Controlla se account è bloccato per troppi tentativi falliti
+  if (isAccountLocked(utente)) {
+    logSecurityEvent({
+      type: SECURITY_EVENTS.LOGIN_FAILED,
+      reason: "account_locked",
+      userId: utente._id,
+      ip: payload._ipAddress,
+    });
+    throw createHttpError(429, getAccountLockedErrorMessage(utente));
   }
 
   const passwordValida = await verifyPassword(password, utente.hashPassword);
 
   if (!passwordValida) {
-    throw createHttpError(401, "Credenziali non valide");
+    // Registra tentativo fallito
+    await registraLoginFallito(utente);
+
+    logSecurityEvent({
+      type: SECURITY_EVENTS.LOGIN_FAILED,
+      reason: "invalid_password",
+      userId: utente._id,
+      ip: payload._ipAddress,
+      attempts: utente.sicurezza?.tentativi_login_falliti || 0,
+    });
+
+    throw createHttpError(401, CREDENZIALI_NON_VALIDE);
   }
 
   if (utente.statoAccount !== STATI_ACCOUNT.ATTIVO) {
-    throw createHttpError(403, "L'account non e attivo");
+    logSecurityEvent({
+      type: SECURITY_EVENTS.LOGIN_FAILED,
+      reason: "account_inactive",
+      userId: utente._id,
+      ip: payload._ipAddress,
+    });
+    throw createHttpError(403, "L'account non è attivo");
+  }
+
+  // Enti pubblici (PublicEntity) devono avere MFA abilitato
+  const isEntePublico = utente.tipoUtente === TIPI_UTENTE.ENTE_PUBBLICO;
+  if (isEntePublico && !utente.impostazioni?.mfaAttiva) {
+    // MFA obbligatorio per enti pubblici
+    throw createHttpError(403, "MFA obbligatorio per gli enti pubblici. Contatta l'amministratore.");
   }
 
   if (utente.impostazioni?.mfaAttiva) {
@@ -435,14 +499,33 @@ async function loginUser(payload) {
     }
 
     if (!validaCodiceMfa(payload.codiceMfa)) {
-      throw createHttpError(401, "Codice MFA non valido");
+      logSecurityEvent({
+        type: SECURITY_EVENTS.LOGIN_FAILED,
+        reason: "invalid_mfa",
+        userId: utente._id,
+        ip: payload._ipAddress,
+      });
+      throw createHttpError(401, CREDENZIALI_NON_VALIDE);
     }
   }
+
+  // Login riuscito - azzera tentavi falliti e aggiorna ultimo accesso
+  await azzeraLoginFalliti(utente);
+  utente.sicurezza = utente.sicurezza || {};
+  utente.sicurezza.ultimo_accesso_il = new Date();
+  await utente.save({ validateBeforeSave: false });
 
   // Ogni login genera un nuovo token, cosi dispositivi diversi possono avere sessioni separate.
   const tokenAccesso = await creaSessioneUtente(utente);
   const accountModel = utente.tipoUtente === TIPI_UTENTE.ENTE_PUBBLICO ? PublicEntity : User;
   const utenteCorrente = await accountModel.findById(utente._id);
+
+  logSecurityEvent({
+    type: SECURITY_EVENTS.LOGIN_SUCCESS,
+    userId: utente._id,
+    tipoUtente: utente.tipoUtente,
+    ip: payload._ipAddress,
+  });
 
   return {
     tokenAccesso,
@@ -465,20 +548,48 @@ async function requestPasswordReset(payload) {
   const email = normalizzaEmail(payload.email);
 
   if (!email) {
-    throw createHttpError(400, "L'email Ã¨ obbligatoria");
+    throw createHttpError(400, "L'email è obbligatoria");
   }
 
   const utente = await trovaUtentePerEmail(email);
 
+  // Unified message: anche se utente non esiste, ritorna stesso messaggio
+  // Questo previene email enumeration
+  const successMessage = "Se esiste un account con questa email, riceverai un codice di reset";
+
   if (!utente) {
-    throw createHttpError(404, "Nessun account associato a questa email");
+    logSecurityEvent({
+      type: SECURITY_EVENTS.PASSWORD_RESET_REQUESTED,
+      reason: "user_not_found",
+      email: email,
+    });
+    // Non lanciare errore - ritorna lo stesso messaggio
+    return {
+      message: successMessage,
+    };
   }
 
-  await creaOtpEmail(email, OTP_PURPOSES.PASSWORD_RESET);
+  try {
+    await creaOtpEmail(email, OTP_PURPOSES.PASSWORD_RESET);
 
-  return {
-    message: "Codice di reset inviato all'email associata all'account",
-  };
+    logSecurityEvent({
+      type: SECURITY_EVENTS.PASSWORD_RESET_REQUESTED,
+      userId: utente._id,
+      email: email,
+    });
+
+    return {
+      message: successMessage,
+    };
+  } catch (error) {
+    // Se c'è cooldown su OTP, still return success message
+    if (error.statusCode === 429) {
+      return {
+        message: successMessage,
+      };
+    }
+    throw error;
+  }
 }
 
 async function resetPassword(payload) {
@@ -486,7 +597,7 @@ async function resetPassword(payload) {
   const password = payload.password || payload.nuovaPassword;
 
   if (!email) {
-    throw createHttpError(400, "L'email Ã¨ obbligatoria");
+    throw createHttpError(400, "L'email è obbligatoria");
   }
 
   assertStrongPassword(password);
@@ -504,8 +615,16 @@ async function resetPassword(payload) {
 
   utente.hashPassword = await hashPassword(password);
   utente.sessioni = [];
+  utente.sicurezza = utente.sicurezza || {};
+  utente.sicurezza.last_password_change_il = new Date();
   await utente.save({ validateBeforeSave: false });
   await EmailOtp.deleteOne({ _id: otp._id });
+
+  logSecurityEvent({
+    type: SECURITY_EVENTS.PASSWORD_RESET_COMPLETED,
+    userId: utente._id,
+    email: email,
+  });
 
   return {
     message: "Password aggiornata con successo",

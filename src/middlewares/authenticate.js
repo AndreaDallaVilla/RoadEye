@@ -2,18 +2,34 @@ const User = require("../models/User");
 const PublicEntity = require("../models/PublicEntity");
 const createHttpError = require("../utils/httpError");
 const { hashSessionToken } = require("../utils/sessionToken");
+const {
+  logSecurityEvent,
+  SECURITY_EVENTS,
+} = require("../utils/securityAudit");
 
 async function authenticate(req, _res, next) {
   try {
     const headerAutorizzazione = req.get("authorization");
 
     if (!headerAutorizzazione || !headerAutorizzazione.startsWith("Bearer ")) {
+      logSecurityEvent({
+        type: SECURITY_EVENTS.UNAUTHORIZED_ACCESS_ATTEMPT,
+        reason: "missing_token",
+        endpoint: req.path,
+        ip: req.ip,
+      });
       throw createHttpError(401, "Token di autenticazione mancante");
     }
 
     const tokenAccesso = headerAutorizzazione.slice("Bearer ".length).trim();
 
     if (!tokenAccesso) {
+      logSecurityEvent({
+        type: SECURITY_EVENTS.UNAUTHORIZED_ACCESS_ATTEMPT,
+        reason: "empty_token",
+        endpoint: req.path,
+        ip: req.ip,
+      });
       throw createHttpError(401, "Token di autenticazione mancante");
     }
 
@@ -35,6 +51,12 @@ async function authenticate(req, _res, next) {
     }
 
     if (!utente) {
+      logSecurityEvent({
+        type: SECURITY_EVENTS.UNAUTHORIZED_ACCESS_ATTEMPT,
+        reason: "invalid_token",
+        endpoint: req.path,
+        ip: req.ip,
+      });
       throw createHttpError(401, "Token di autenticazione non valido o scaduto");
     }
 
@@ -45,6 +67,13 @@ async function authenticate(req, _res, next) {
     );
 
     if (!sessioneCorrente) {
+      logSecurityEvent({
+        type: SECURITY_EVENTS.UNAUTHORIZED_ACCESS_ATTEMPT,
+        reason: "expired_session",
+        userId: utente._id,
+        endpoint: req.path,
+        ip: req.ip,
+      });
       throw createHttpError(401, "Token di autenticazione non valido o scaduto");
     }
 

@@ -23,3 +23,5 @@ temp/
 *.bak
 *.local
 src/scripts/test*.js
+*.md
+!README.md

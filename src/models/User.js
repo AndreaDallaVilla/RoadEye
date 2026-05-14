@@ -182,6 +182,33 @@ const schemaUtente = new mongoose.Schema(
       default: [],
       select: false,
     },
+    sicurezza: {
+      tentativi_login_falliti: {
+        type: Number,
+        default: 0,
+        select: false,
+      },
+      bloccatoFino: {
+        type: Date,
+        default: null,
+        select: false,
+      },
+      ultimo_tentativo_il: {
+        type: Date,
+        select: false,
+      },
+      email_verificata_il: {
+        type: Date,
+      },
+      last_password_change_il: {
+        type: Date,
+        select: false,
+      },
+      ultimo_accesso_il: {
+        type: Date,
+        select: false,
+      },
+    },
   },
   {
     timestamps: true,
@@ -190,6 +217,7 @@ const schemaUtente = new mongoose.Schema(
       transform(_doc, ret) {
         delete ret.hashPassword;
         delete ret.sessioni;
+        delete ret.sicurezza;
         delete ret.__v;
         return ret;
       },
