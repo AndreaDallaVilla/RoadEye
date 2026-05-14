@@ -24,7 +24,7 @@
 
 - `main`:  OpenAPI versions
 - `devel`: web/app code
-- 'test': testing
+- `test`: testing
 
 
 
