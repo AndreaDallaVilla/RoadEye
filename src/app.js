@@ -19,17 +19,7 @@ app.use((req, res, next) => {
   // Content Security Policy - rigoroso
   res.setHeader(
     "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' https://ajax.googleapis.com https://maps.googleapis.com https://maps.gstatic.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: https:",
-      "font-src 'self' https://fonts.gstatic.com",
-      "connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com",
-      "frame-ancestors 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join("; "),
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com *.google.com; worker-src 'self' blob:; frame-src *.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
   
   // Prevent MIME type sniffing
