@@ -51,10 +51,6 @@
   const severityRange = document.querySelector("#severity-range"); // gestione della gravità
   const severityLabel = document.querySelector("#severity-label"); // gestione della gravità
   const headerSectionTitle = document.querySelector("#header-section-title"); // cambiare il titolo in alto nella pagina dinamicamente
-  const bottomHomeSubmit = document.querySelector("#bottom-home-submit");
-  const bottomPrimaryAction = document.querySelector("#bottom-primary-action");
-  const appToast = document.querySelector("#app-toast");
-  const detailModalClose = document.querySelector("#detail-modal-close");
 
   const viewTitles = { // visione di titoli 
     home: "Home",
@@ -1321,8 +1317,6 @@
     document.querySelectorAll("[data-login-mode]").forEach((button) => {
       button.addEventListener("click", () => showLoginMode(button.dataset.loginMode));
     });
-
-    detailModalClose?.addEventListener("click", chiudiDettaglio);
   }
 
   async function logout() {
