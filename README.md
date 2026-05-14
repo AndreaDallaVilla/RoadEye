@@ -18,6 +18,33 @@
 
 - [v0.1.1](versions/v0.1.1/openapi.yaml)
 
+## Terminal commands:
+- Authentication: **npm run test:auth-api:auto**
+
+## Google Maps API
+
+Add a Google Maps Platform key to `.env`:
+
+```env
+GOOGLE_MAPS_BROWSER_API_KEY=<google-maps-browser-api-key>
+GOOGLE_MAPS_SERVER_API_KEY=<google-maps-server-api-key>
+GOOGLE_MAPS_LANGUAGE=it
+GOOGLE_MAPS_REGION=it
+```
+
+The backend exposes public endpoints for the RoadEye map workflow:
+
+- `GET /api/maps/geocode?indirizzo=Via Roma 1, Milano`
+- `GET /api/maps/reverse-geocode?latitudine=45.4642&longitudine=9.19`
+- `GET /api/maps/embed-url?query=Via Roma 1, Milano`
+
+Use the returned coordinates to save report locations, and use `embedUrl` as the `src` of a frontend iframe.
+
+## Frontend versioning
+
+- `https://www.roadeye.it/` serves the current frontend.
+- `https://www.roadeye.it/v1` serves the stable v1 frontend snapshot.
+
 ## Branch
 
 - `main`: API versions
