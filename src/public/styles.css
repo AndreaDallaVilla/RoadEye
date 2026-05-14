@@ -242,10 +242,71 @@ gmp-map {
   color: var(--accent);
 }
 
+.map-cluster-marker {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 5px rgba(20, 20, 20, 0.24);
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.detail-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.8);
+  padding: clamp(12px, 4vh, 32px) 12px;
+}
+
+.detail-modal-panel {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 560px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 14px;
+}
+
+.detail-modal-close {
+  justify-self: end;
+  min-height: 34px;
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 5px 10px;
+  font-weight: 800;
+}
+
+.detail-modal-panel h2,
+.detail-modal-panel p {
+  margin: 0;
+}
+
+.detail-modal-panel p {
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .detail-map {
   width: 100%;
-  height: min(44vh, 320px);
-  min-height: 220px;
+  height: clamp(190px, 34vh, 300px);
+  min-height: 0;
   margin: 10px 0 12px;
   border: 2px solid var(--line);
   background: var(--soft);
@@ -810,6 +871,57 @@ gmp-map {
   font-size: 1.5rem;
 }
 
+.bottom-actions .primary-action.home-mode {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.bottom-actions .primary-action .home-icon {
+  display: block;
+  width: 25px;
+  height: 25px;
+  margin: 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.bottom-actions .submit-mode {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 800;
+}
+
+.toast-popup {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.toast-dialog {
+  width: min(300px, calc(100% - 48px));
+  border: 2px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 20px 18px;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(20, 20, 20, 0.24);
+}
+
+.toast-dialog p {
+  margin: 0;
+  font-weight: 800;
+}
+
+.toast-popup[hidden] {
+  display: none;
+}
+
 @media (min-width: 760px) {
   .phone-app {
     width: min(96vw, 1040px);
@@ -859,6 +971,12 @@ gmp-map {
   }
 }
 
+@media (max-width: 759px) {
+  .report-inline-submit {
+    display: none;
+  }
+}
+
 @media (max-width: 420px) {
   .phone-app {
     width: 100vw;
@@ -874,6 +992,20 @@ gmp-map {
   .brand-logo {
     width: clamp(48px, 14vw, 58px);
     height: clamp(48px, 14vw, 58px);
+  }
+
+  .detail-modal {
+    padding: 8px;
+  }
+
+  .detail-modal-panel {
+    max-height: calc(100vh - 16px);
+    padding: 10px;
+  }
+
+  .detail-map {
+    height: 190px;
+    margin: 8px 0;
   }
 
   .gdpr-consent {

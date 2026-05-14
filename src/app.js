@@ -68,6 +68,7 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", service: "roadeye-api" });
 });
 
+app.use("/api/v1", apiRouter);
 app.use("/api", apiRouter);
 app.use(notFound);
 app.use(errorHandler);

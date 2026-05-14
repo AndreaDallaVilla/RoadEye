@@ -11,6 +11,22 @@
     Autovelox: "#188038",
   };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
+  const API_BASE_URL = "/api/v1";
+  const AREA_CLUSTER_MAX_ZOOM = 8;
+  const ANNOUNCEMENT_MARKERS_MIN_ZOOM = 12;
+  const TRENTINO_CLUSTER_AREAS = [
+    { label: "Trento e Valle dell'Adige", latMin: 45.98, latMax: 46.2, lngMin: 11.0, lngMax: 11.22 },
+    { label: "Rovereto e Vallagarina", latMin: 45.68, latMax: 45.98, lngMin: 10.88, lngMax: 11.18 },
+    { label: "Alto Garda e Ledro", latMin: 45.78, latMax: 45.98, lngMin: 10.58, lngMax: 10.98 },
+    { label: "Giudicarie e Rendena", latMin: 45.88, latMax: 46.28, lngMin: 10.45, lngMax: 10.9 },
+    { label: "Val di Non", latMin: 46.22, latMax: 46.54, lngMin: 10.92, lngMax: 11.22 },
+    { label: "Val di Sole", latMin: 46.22, latMax: 46.55, lngMin: 10.55, lngMax: 10.98 },
+    { label: "Bolzano/Merano", latMin: 46.45, latMax: 46.75, lngMin: 10.9, lngMax: 11.45 },
+    { label: "Rotaliana e Paganella", latMin: 46.15, latMax: 46.32, lngMin: 10.98, lngMax: 11.25 },
+    { label: "Valsugana", latMin: 45.92, latMax: 46.16, lngMin: 11.22, lngMax: 11.72 },
+    { label: "Fiemme e Fassa", latMin: 46.18, latMax: 46.55, lngMin: 11.32, lngMax: 11.82 },
+    { label: "Primiero", latMin: 46.05, latMax: 46.32, lngMin: 11.68, lngMax: 11.98 },
+  ];
 
 
   const map = document.querySelector("gmp-map");
@@ -35,6 +51,9 @@
   const severityRange = document.querySelector("#severity-range"); // gestione della gravità
   const severityLabel = document.querySelector("#severity-label"); // gestione della gravità
   const headerSectionTitle = document.querySelector("#header-section-title"); // cambiare il titolo in alto nella pagina dinamicamente
+  const bottomHomeSubmit = document.querySelector("#bottom-home-submit");
+  const bottomPrimaryAction = document.querySelector("#bottom-primary-action");
+  const appToast = document.querySelector("#app-toast");
 
   const viewTitles = { // visione di titoli 
     home: "Home",
@@ -57,6 +76,7 @@
   let currentReportStep = "topic";
   let publicEntities = [];
   let pendingReportForm = null;
+  let appToastTimer = null;
   let pendingRegistrationPayload = null;
   const otpCooldownTimers = new Map();
   let announcementMarkers = [];
@@ -67,6 +87,9 @@
   let clientMapConfig = null;
   let detailMap = null;
   let detailMapMarker = null;
+  let announcementClusterMarkers = [];
+  let activeAnnouncements = [];
+  let openClusterInfoWindow = null;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
@@ -243,7 +266,18 @@
   }
 
   function shouldShowAnnouncementMarkers() {
-    return currentView === "home";
+    const zoom = map?.innerMap?.getZoom?.();
+    return currentView === "home" && Number.isFinite(zoom) && zoom >= ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+  }
+
+  function shouldShowAnnouncementClusters() {
+    const zoom = map?.innerMap?.getZoom?.();
+    return currentView === "home" && Number.isFinite(zoom) && zoom < ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+  }
+
+  function getClusterLevel() {
+    const zoom = map?.innerMap?.getZoom?.();
+    return Number.isFinite(zoom) && zoom <= AREA_CLUSTER_MAX_ZOOM ? "area" : "comune";
   }
 
   function updateAnnouncementMarkersVisibility() {
@@ -256,6 +290,17 @@
     announcementMarkers.forEach((announcementMarker) => {
       announcementMarker.map = markerMap;
     });
+
+    const clusterMap = shouldShowAnnouncementClusters() ? map.innerMap : null;
+
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = clusterMap;
+    });
+
+    if (!clusterMap) {
+      openClusterInfoWindow?.close();
+      openClusterInfoWindow = null;
+    }
   }
 
   function getAddressFromGeocodeResult(result) {
@@ -635,8 +680,8 @@
 
   function showView(viewName) {
     if (viewName === "report" && !getToken()) {
-      window.alert("Devi effettuare l'accesso per creare un annuncio.");
       drawer.classList.remove("open");
+      showAppToast("Devi effettuare l'accesso per creare un annuncio.", 2000);
       showAuth("login");
       return;
     }
@@ -660,6 +705,7 @@
       moveMapPanel("home");
     }
 
+    updateBottomActions();
     drawer.classList.remove("open");
   }
 
@@ -670,6 +716,60 @@
     reportTopicStep.classList.toggle("active", isTopicStep);
     reportForm.classList.toggle("active", !isTopicStep);
     moveMapPanel(isTopicStep ? "home" : "report");
+    updateBottomActions();
+  }
+
+  function isReportDetailsStep() {
+    return currentView === "report" && currentReportStep === "details";
+  }
+
+  function updateBottomActions() {
+    if (!bottomHomeSubmit || !bottomPrimaryAction) {
+      return;
+    }
+
+    const reportDetailsActive = isReportDetailsStep();
+
+    bottomHomeSubmit.textContent = reportDetailsActive ? "Invio" : "HOME";
+    bottomHomeSubmit.dataset.view = reportDetailsActive ? "" : "home";
+    bottomHomeSubmit.classList.toggle("submit-mode", reportDetailsActive);
+    bottomHomeSubmit.setAttribute("aria-label", reportDetailsActive ? "Invia annuncio" : "Vai alla home");
+
+    bottomPrimaryAction.innerHTML = reportDetailsActive
+      ? '<svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2"/><path d="M6.5 10.5V20h11v-9.5"/><path d="M10 20v-5h4v5"/></svg>'
+      : "+";
+    bottomPrimaryAction.dataset.view = reportDetailsActive ? "home" : "report";
+    bottomPrimaryAction.classList.toggle("home-mode", reportDetailsActive);
+    bottomPrimaryAction.setAttribute("aria-label", reportDetailsActive ? "Torna alla home" : "Crea annuncio");
+  }
+
+  function showAppToast(message, duration = 2000) {
+    if (!appToast) {
+      return Promise.resolve();
+    }
+
+    if (appToastTimer) {
+      window.clearTimeout(appToastTimer);
+    }
+
+    appToast.replaceChildren();
+    const dialog = document.createElement("div");
+    const text = document.createElement("p");
+    dialog.className = "toast-dialog";
+    text.textContent = message;
+    dialog.append(text);
+    appToast.append(dialog);
+    appToast.hidden = false;
+    appToast.classList.add("visible");
+
+    return new Promise((resolve) => {
+      appToastTimer = window.setTimeout(() => {
+        appToast.classList.remove("visible");
+        appToast.hidden = true;
+        appToastTimer = null;
+        resolve();
+      }, duration);
+    });
   }
 
   function moveMapPanel(target) {
@@ -765,6 +865,10 @@
       body: JSON.stringify(payload),
     });
 
+    if (severityDialog.open) {
+      severityDialog.close();
+    }
+
     form.reset();
     selectedPlace = null;
     selectedLocation = null;
@@ -774,7 +878,7 @@
     showReportStep("topic");
     await loadActiveAnnouncements();
     await aggiornaListaTestualeAnnunci();
-    window.alert("Annuncio pubblicato.");
+    await showAppToast("Annuncio creato", 2000);
     showView("home");
   }
 
@@ -883,8 +987,14 @@
     });
   }
 
+  function getVersionedApiUrl(url) {
+    return typeof url === "string" && url.startsWith("/api/")
+      ? `${API_BASE_URL}${url.slice(4)}`
+      : url;
+  }
+
   async function requestJson(url, options) {
-    const response = await fetch(url, {
+    const response = await fetch(getVersionedApiUrl(url), {
       headers: {
         "Content-Type": "application/json",
         ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
@@ -1187,7 +1297,16 @@
     });
 
     document.querySelectorAll("[data-view]").forEach((button) => {
-      button.addEventListener("click", () => showView(button.dataset.view));
+      button.addEventListener("click", () => {
+        if (button === bottomHomeSubmit && isReportDetailsStep()) {
+          reportForm.requestSubmit();
+          return;
+        }
+
+        if (button.dataset.view) {
+          showView(button.dataset.view);
+        }
+      });
     });
 
     document.querySelectorAll("[data-open-auth]").forEach((button) => {
@@ -1256,7 +1375,9 @@
       try {
         await publishAnnouncement(pendingReportForm, getSelectedSeverity());
         pendingReportForm = null;
-        severityDialog.close();
+        if (severityDialog.open) {
+          severityDialog.close();
+        }
       } catch (error) {
         window.alert(error.message);
       }
@@ -1455,6 +1576,7 @@
         mapTypeControl: false,
         streetViewControl: false,
         clickableIcons: false,
+        disableDoubleClickZoom: true,
         restriction: {
           latLngBounds: config.bounds,
           strictBounds: false,
@@ -1526,6 +1648,12 @@
           setStatus(error.message, "error");
         }
       });
+      map.innerMap.addListener("zoom_changed", updateAnnouncementMarkersVisibility);
+      map.innerMap.addListener("zoom_changed", refreshAnnouncementClusters);
+      map.innerMap.addListener("idle", () => {
+        refreshAnnouncementClusters();
+        updateAnnouncementMarkersVisibility();
+      });
 
       await loadActiveAnnouncements();
       setStatus("Mappa pronta", "ready");
@@ -1539,6 +1667,262 @@
       announcementMarker.map = null;
     });
     announcementMarkers = [];
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = null;
+    });
+    announcementClusterMarkers = [];
+  }
+
+  function clearAnnouncementClusterMarkers() {
+    openClusterInfoWindow?.close();
+    openClusterInfoWindow = null;
+    announcementClusterMarkers.forEach((clusterMarker) => {
+      clusterMarker.map = null;
+    });
+    announcementClusterMarkers = [];
+  }
+
+  function refreshAnnouncementClusters(force = false) {
+    if (!activeAnnouncements.length || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    const previousLevel = announcementClusterMarkers[0]?.clusterLevel;
+    const nextLevel = getClusterLevel();
+
+    if (!force && previousLevel === nextLevel) {
+      return;
+    }
+
+    clearAnnouncementClusterMarkers();
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements);
+    updateAnnouncementMarkersVisibility();
+  }
+
+  function rebuildAnnouncementClusters(clusterLevel) {
+    if (!activeAnnouncements.length || typeof google === "undefined" || !google.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    clearAnnouncementClusterMarkers();
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements, clusterLevel);
+    updateAnnouncementMarkersVisibility();
+  }
+
+  function getAnnouncementComune(announcement) {
+    const position = typeof announcement.posizione === "string" ? announcement.posizione.trim() : "";
+
+    if (!position) {
+      return "Zona non specificata";
+    }
+
+    const cleanLocationPart = (part) =>
+      part
+        .replace(/\b[A-Z0-9]{2,4}\+[A-Z0-9]{2,4}\b/gi, "")
+        .replace(/\b\d{5}\b/g, "")
+        .replace(/\b(TN|BZ)\b/gi, "")
+        .replace(/^[\d\s:/.-]+/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const parts = position
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map(cleanLocationPart)
+      .filter(Boolean)
+      .filter((part) => !/^\d/.test(part))
+      .filter((part) => !/[A-Z0-9]{2,4}\+[A-Z0-9]{2,4}/i.test(part))
+      .filter((part) => !/^[A-Z]{1,3}$/i.test(part))
+      .filter((part) => /[a-zàèéìòù]/i.test(part))
+      .filter((part) => !/\b(italia|italy|provincia autonoma di trento|trentino-alto adige|trentino)\b/i.test(part));
+
+    const likelyComune = parts
+      .slice()
+      .reverse()
+      .find((part) => !/\d/.test(part) && part.length > 2);
+
+    return likelyComune || parts.at(-1) || parts[0] || "Zona non specificata";
+  }
+
+  function getAnnouncementAreaLabel(announcement) {
+    const lat = announcement.coordinate?.latitudine;
+    const lng = announcement.coordinate?.longitudine;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return "Zona non specificata";
+    }
+
+    const area = TRENTINO_CLUSTER_AREAS.find((candidate) =>
+      lat >= candidate.latMin &&
+      lat <= candidate.latMax &&
+      lng >= candidate.lngMin &&
+      lng <= candidate.lngMax
+    );
+
+    const fallbackComune = getAnnouncementComune(announcement).replace(/^[\d\s:/.-]+/, "").trim();
+    const hasCleanFallback = fallbackComune && fallbackComune !== "Zona non specificata" && !/^\d/.test(fallbackComune);
+
+    return area?.label || (hasCleanFallback ? `Zona ${fallbackComune}` : "Zona non specificata");
+  }
+
+  function getClusterKey(announcement, level) {
+    return level === "area" ? getAnnouncementAreaLabel(announcement) : getAnnouncementComune(announcement);
+  }
+
+  function formatClusterLabel(group, clusterLevel) {
+    if (clusterLevel === "area") {
+      return group.key;
+    }
+
+    return group.key;
+  }
+
+  function createClusterContent(group) {
+    const element = document.createElement("button");
+    element.className = "map-cluster-marker";
+    element.type = "button";
+    element.textContent = String(group.count);
+    element.setAttribute("aria-label", `${group.count} annunci in ${group.label}`);
+    return element;
+  }
+
+  function createAnnouncementClusterMarkers(announcements, forcedClusterLevel) {
+    const groups = new Map();
+    const clusterLevel = forcedClusterLevel || getClusterLevel();
+
+    announcements.forEach((announcement) => {
+      if (!announcement.coordinate?.latitudine || !announcement.coordinate?.longitudine) {
+        return;
+      }
+
+      const label = getClusterKey(announcement, clusterLevel);
+      const group = groups.get(label) || {
+        key: label,
+        count: 0,
+        latSum: 0,
+        lngSum: 0,
+        minLat: Infinity,
+        maxLat: -Infinity,
+        minLng: Infinity,
+        maxLng: -Infinity,
+        announcements: [],
+      };
+
+      group.count += 1;
+      const lat = announcement.coordinate.latitudine;
+      const lng = announcement.coordinate.longitudine;
+      group.latSum += lat;
+      group.lngSum += lng;
+      group.minLat = Math.min(group.minLat, lat);
+      group.maxLat = Math.max(group.maxLat, lat);
+      group.minLng = Math.min(group.minLng, lng);
+      group.maxLng = Math.max(group.maxLng, lng);
+      group.announcements.push(announcement);
+      groups.set(label, group);
+    });
+
+    return Array.from(groups.values()).map((group) => {
+      group.label = formatClusterLabel(group, clusterLevel);
+      const position = {
+        lat: group.latSum / group.count,
+        lng: group.lngSum / group.count,
+      };
+      const clusterContent = createClusterContent(group);
+      const clusterMarker = new google.maps.marker.AdvancedMarkerElement({
+        map: shouldShowAnnouncementClusters() ? map.innerMap : null,
+        position,
+        title: `${group.count} annunci - ${group.label}`,
+        content: clusterContent,
+      });
+      clusterMarker.clusterLevel = clusterLevel;
+
+      const clusterInfoWindow = new google.maps.InfoWindow({
+        content: `<strong>${group.label}</strong><br><span>${group.count} annunci</span>`,
+      });
+      let lastClusterDrillAt = 0;
+      let lastClusterTapAt = 0;
+
+      function drillDownCluster() {
+        const now = Date.now();
+
+        if (now - lastClusterDrillAt < 220) {
+          return;
+        }
+
+        lastClusterDrillAt = now;
+        openClusterInfoWindow?.close();
+        openClusterInfoWindow = null;
+        const targetZoom = clusterLevel === "area" ? AREA_CLUSTER_MAX_ZOOM + 1 : ANNOUNCEMENT_MARKERS_MIN_ZOOM;
+        const centerOfGroup = {
+          lat: group.latSum / group.count,
+          lng: group.lngSum / group.count,
+        };
+        const markerLocation = getPlainLocation(clusterMarker.position) || position;
+        const targetCenter = clusterLevel === "area" ? markerLocation : centerOfGroup;
+
+        map.innerMap.setCenter(targetCenter);
+        map.innerMap.setZoom(targetZoom);
+
+        if (clusterLevel === "area") {
+          rebuildAnnouncementClusters("comune");
+          return;
+        }
+
+        const refreshAfterMove = () => {
+          clearAnnouncementClusterMarkers();
+          updateAnnouncementMarkersVisibility();
+        };
+
+        if (google.maps.event?.addListenerOnce) {
+          google.maps.event.addListenerOnce(map.innerMap, "idle", refreshAfterMove);
+        } else {
+          window.setTimeout(refreshAfterMove, 0);
+        }
+      }
+
+      function openClusterSummary() {
+        openClusterInfoWindow?.close();
+        clusterInfoWindow.open(map.innerMap, clusterMarker);
+        openClusterInfoWindow = clusterInfoWindow;
+      }
+
+      clusterContent.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      clusterContent.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (event.detail >= 2) {
+          drillDownCluster();
+          return;
+        }
+
+        openClusterSummary();
+      });
+      clusterContent.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        drillDownCluster();
+      });
+      clusterContent.addEventListener("touchend", (event) => {
+        const now = Date.now();
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (now - lastClusterTapAt < 360) {
+          drillDownCluster();
+          lastClusterTapAt = 0;
+          return;
+        }
+
+        lastClusterTapAt = now;
+        openClusterSummary();
+      });
+
+      return clusterMarker;
+    });
   }
 
   function createAnnouncementMarker(announcement) { // crea il marker
@@ -1560,15 +1944,8 @@
       title,
       content: pin.element,
     });
-    const content = [
-      `<strong>${announcement.topic}</strong>`,
-      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
-      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
-    ].filter(Boolean).join("<br>");
-    const infoWindow = new google.maps.InfoWindow({ content });
-
     markerElement.addListener("click", () => {
-      infoWindow.open(map.innerMap, markerElement);
+      mostraDettagliCompleti(announcement);
     });
 
     return markerElement;
@@ -1581,10 +1958,12 @@
 
     const payload = await requestJson("/api/announcements/active");
     clearAnnouncementMarkers();
+    activeAnnouncements = payload.data || [];
 
-    announcementMarkers = (payload.data || [])
+    announcementMarkers = activeAnnouncements
       .filter((announcement) => announcement.coordinate?.latitudine && announcement.coordinate?.longitudine)
       .map(createAnnouncementMarker);
+    announcementClusterMarkers = createAnnouncementClusterMarkers(activeAnnouncements);
     updateAnnouncementMarkersVisibility();
   }
 
@@ -1688,7 +2067,7 @@
     document.getElementById('det-id').innerText = annuncio.idAnnuncio;
 
     // appare la finestra
-    document.getElementById('modal-dettaglio').style.display = 'block';
+    document.getElementById('modal-dettaglio').style.display = 'grid';
     renderDetailMap(annuncio);
 
     // blocca lo scroll della pagina sotto
@@ -1701,10 +2080,7 @@
     if (!container) return;
 
     try {
-      const response = await fetch('/api/announcements/active');
-      if (!response.ok) throw new Error(`Errore server: ${response.status}`);
-
-      const payload = await response.json();
+      const payload = await requestJson('/api/announcements/active');
       const annunciArray = payload.data || [];
 
       container.innerHTML = ''; // Svuota la lista prima di riempirla
