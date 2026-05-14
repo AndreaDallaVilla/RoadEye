@@ -19,7 +19,7 @@ app.use((req, res, next) => {
   // Content Security Policy - rigoroso
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com *.google.com; worker-src 'self' blob:; frame-src *.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://ajax.googleapis.com https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com *.google.com *.googleusercontent.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com *.google.com https://*.ggpht.com *.googleusercontent.com; worker-src 'self' blob:; frame-src *.google.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
   
   // Prevent MIME type sniffing
@@ -50,7 +50,6 @@ if (allowedOrigins.length === 0) {
 
 app.use(
   cors({
-      origin: process.env.CLIENT_URL || "*",
     origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -60,6 +59,11 @@ app.use(
 
 app.use(express.json({ limit: "10kb" })); // Limita grandezza richieste
 app.use(morgan("dev"));
+
+app.get("/v1", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "v1", "index.html"));
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 // Apply rate limiting alla API

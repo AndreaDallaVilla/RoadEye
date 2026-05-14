@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: RoadEye API
   version: 0.1.0
-  description: Specifica OpenAPI dei servizi REST esposti dal backend RoadEye. Gli endpoint documentati usano il prefisso /api/v1; il prefisso storico /api resta disponibile come alias di compatibilita per la versione corrente.
+  description: Specifica OpenAPI dei servizi REST esposti dal backend RoadEye. Gli endpoint documentati usano il prefisso /api/v1; il prefisso storico /api resta disponibile come alias della versione corrente. Il frontend aggiornato in modo continuo resta pubblicato su /, mentre lo snapshot stabile della versione 1 resta disponibile su /v1.
   license:
     name: Proprietary
 
