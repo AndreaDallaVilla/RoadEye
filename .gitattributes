@@ -1,3 +1,4 @@
 package-lock.json linguist-generated=true
 openapi.yaml linguist-documentation=true
 src/public/v1/** linguist-generated=true
+apiary.apib linguist-documentation=true
