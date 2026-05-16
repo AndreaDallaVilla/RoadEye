@@ -1,0 +1,6 @@
+package-lock.json linguist-generated=true
+openapi.yaml linguist-documentation=true
+src/public/v1/** linguist-generated=true
+src/public/**/*.html linguist-detectable=true linguist-generated=false
+src/public/**/*.css linguist-detectable=true linguist-generated=false
+src/public/**/*.js linguist-detectable=true linguist-generated=false
