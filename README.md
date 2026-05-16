@@ -1,4 +1,4 @@
-# RoadEye
+# <img width="590" height="97" alt="immagine" src="https://github.com/user-attachments/assets/95d1d52e-d306-4cc3-b156-7323830bd00e" />
 **Members of the project:**
 - Francesca Bassi  ID 247688
 - Lorenzo Vadacca  ID 256374
