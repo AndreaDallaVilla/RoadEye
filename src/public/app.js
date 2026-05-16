@@ -57,7 +57,7 @@
 
   const viewTitles = { // visione di titoli 
     home: "Home",
-    report: "Nuova segnalazione",
+    report: "Segnalazione",
     auth: "Accedi",
   };
 
@@ -698,6 +698,7 @@
     document.querySelector(`#${viewName}-screen`).classList.add("active");
     currentView = viewName;
     headerSectionTitle.textContent = viewTitles[viewName] || "Home";
+    headerAuthButton.hidden = viewName === "auth" || viewName === "report";
 
     if (viewName === "report") {
       showReportStep("topic");
