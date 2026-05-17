@@ -2,13 +2,25 @@
   const TOKEN_KEY = "roadeye.token";
   const USER_KEY = "roadeye.user";
   const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"]; // topic che hanno bisogno di avere la gravità
-  const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica 
+  const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica
     "Incidente stradale": "#d93025",
-    "Cantiere stradale": "#f9ab00",
-    Evento: "#1a73e8",
-    "Ferimento animali": "#8e24aa",
-    "Pericolo bordo strada": "#e8710a",
-    Autovelox: "#188038",
+    "Cantiere stradale": "#fbbc04",
+    Evento: "#7e3ff2",
+    "Ferimento animali": "#188038",
+    "Pericolo bordo strada": "#141414",
+    Autovelox: "#1a9bd7",
+  };
+  const TOPIC_ICON_COLORS = {
+    "Cantiere stradale": "#141414",
+    "Pericolo bordo strada": "#ffffff",
+  };
+  const TOPIC_MARKER_ICONS = {
+    Autovelox: "/assets/topic-autovelox.png",
+    "Cantiere stradale": "/assets/topic-cantiere.png",
+    "Incidente stradale": "/assets/topic-incidente.png",
+    "Ferimento animali": "/assets/topic-animali.png",
+    "Pericolo bordo strada": "/assets/topic-pericolo.png",
+    Evento: "/assets/topic-evento.png",
   };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
   const API_BASE_URL = "/api/v1";
@@ -1931,25 +1943,59 @@
       lat: announcement.coordinate.latitudine,
       lng: announcement.coordinate.longitudine,
     };
-    const color = TOPIC_MARKER_COLORS[announcement.topic] || "#141414";
-    const pin = new google.maps.marker.PinElement({
-      background: color,
-      borderColor: "#141414",
-      glyphColor: "#ffffff",
-      glyph: announcement.topic?.charAt(0) || "",
-    });
+    const markerContent = createAnnouncementMarkerContent(announcement.topic);
     const title = `${announcement.topic}${announcement.posizione ? ` - ${announcement.posizione}` : ""}`;
     const markerElement = new google.maps.marker.AdvancedMarkerElement({
       map: shouldShowAnnouncementMarkers() ? map.innerMap : null,
       position,
       title,
-      content: pin.element,
+      content: markerContent,
     });
     markerElement.addListener("click", () => {
       mostraDettagliCompleti(announcement);
     });
 
     return markerElement;
+  }
+
+  function getTopicColor(topic) {
+    return TOPIC_MARKER_COLORS[topic] || "#141414";
+  }
+
+  function getTopicIconColor(topic) {
+    return TOPIC_ICON_COLORS[topic] || "#ffffff";
+  }
+
+  function createAnnouncementMarkerContent(topic, options = {}) {
+    const element = document.createElement("span");
+    element.className = options.compact ? "announcement-topic-badge compact" : "map-announcement-marker";
+    element.style.setProperty("--marker-color", getTopicColor(topic));
+    element.style.setProperty("--marker-icon-color", getTopicIconColor(topic));
+    const iconSrc = TOPIC_MARKER_ICONS[topic];
+    if (iconSrc) {
+      const icon = document.createElement("img");
+      icon.src = iconSrc;
+      icon.alt = "";
+      icon.loading = "lazy";
+      element.append(icon);
+    } else {
+      element.textContent = topic?.charAt(0) || "";
+    }
+    element.setAttribute("aria-hidden", "true");
+    return element;
+  }
+
+  function updateCategoryTopicStyles() {
+    document.querySelectorAll("[data-category]").forEach((button) => {
+      const topic = button.dataset.category;
+      const iconSlot = button.querySelector(".topic-choice-icon");
+      button.style.setProperty("--topic-color", getTopicColor(topic));
+      if (!iconSlot) {
+        return;
+      }
+
+      iconSlot.replaceChildren(createAnnouncementMarkerContent(topic, { compact: true }));
+    });
   }
 
   async function loadActiveAnnouncements() {
@@ -1976,21 +2022,30 @@
     const div = document.createElement('div');
     div.className = 'annuncio-news';
     div.style.cursor = 'pointer';
+    div.style.setProperty("--marker-color", getTopicColor(announcement.topic));
 
     // gestione del click sull'annuncio
     div.onclick = () => mostraDettagliCompleti(announcement);
 
-    const content = [
-      `<strong>${announcement.topic}</strong>`,
-      announcement.nomeAutore ? `<span>${announcement.nomeAutore}</span>` : "",
-      announcement.posizione ? `<span>${announcement.posizione}</span>` : "",
-      announcement.gravita ? `<span>${announcement.gravita}</span>` : "",
-      announcement.descrizione ? `<span>${announcement.descrizione}</span>` : "",
-    ].filter(Boolean).join("<br>");
+    const badge = createAnnouncementMarkerContent(announcement.topic, { compact: true });
+    const text = document.createElement("div");
+    text.className = "annuncio-news-text";
+    const title = document.createElement("strong");
+    title.textContent = announcement.topic || "Annuncio";
+    text.append(title);
 
-    const color = (typeof TOPIC_MARKER_COLORS !== 'undefined') ? TOPIC_MARKER_COLORS[announcement.topic] : "#141414";
-    div.style.borderLeft = `5px solid ${color}`;
-    div.innerHTML = content;
+    [
+      announcement.nomeAutore,
+      announcement.posizione,
+      announcement.gravita,
+      announcement.descrizione,
+    ].filter(Boolean).forEach((value) => {
+      const item = document.createElement("span");
+      item.textContent = value;
+      text.append(item);
+    });
+
+    div.append(badge, text);
 
     container.appendChild(div);
   }
@@ -2037,6 +2092,7 @@
           map: detailMap,
           position: location,
           title: announcement.topic || "Posizione annuncio",
+          content: createAnnouncementMarkerContent(announcement.topic),
         });
       } else if (!detailMapMarker && google.maps.Marker) {
         detailMapMarker = new google.maps.Marker({
@@ -2048,6 +2104,7 @@
         if ("position" in detailMapMarker) {
           detailMapMarker.map = detailMap;
           detailMapMarker.position = location;
+          detailMapMarker.content = createAnnouncementMarkerContent(announcement.topic);
         } else if (typeof detailMapMarker.setMap === "function") {
           detailMapMarker.setMap(detailMap);
           detailMapMarker.setPosition(location);
@@ -2103,6 +2160,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     bindNavigation();
     bindForms();
+    updateCategoryTopicStyles();
     initPasswordToggles();
     initPasswordStrengthIndicator();
     document.querySelector("#detail-modal-close")?.addEventListener("click", chiudiDettaglio);
