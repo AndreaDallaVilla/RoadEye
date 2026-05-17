@@ -33,4 +33,4 @@
 
 
 
-Copyright(c)2026AndreaDallaVilla
+Copyright (c) 2026 Andrea Dalla Villa, Lorenzo Vadacca, Francesca Bassi
