@@ -20,6 +20,12 @@ const annuncioSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    nomeAutore: {
+        type: String,
+        required: false,
+        trim: true,
+        maxlength: 160
+    },
     descrizione: {
         type: String,
         required: false,

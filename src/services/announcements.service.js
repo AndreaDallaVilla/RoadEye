@@ -9,9 +9,12 @@ const User = require("../models/User");
 const ANNOUNCEMENT_COUNTER_ID = "annunci.idAnnuncio";
 const ANNOUNCEMENT_COUNTER_COLLECTION = "counters";
 const ANNOUNCEMENT_CODE_BLOCK_SIZE = 10000;
+const MIN_DISTANCE_SAME_TOPIC_METERS = 25;
 
 // permette creare l’oggetto annuncio con i relativi attributi
 exports.creaAnnuncio = async function (datiAnnuncio) {
+    await verificaDistanzaMinimaStessoTopic(datiAnnuncio);
+
     for (let attempt = 0; attempt < 3; attempt += 1) {
         const nuovoCodice = await generaProssimoIdAnnuncio();
         const annuncio = new Annuncio({
@@ -28,6 +31,71 @@ exports.creaAnnuncio = async function (datiAnnuncio) {
         }
     }
 
+}
+
+async function verificaDistanzaMinimaStessoTopic(datiAnnuncio) {
+    const latitudine = Number(datiAnnuncio?.coordinate?.latitudine);
+    const longitudine = Number(datiAnnuncio?.coordinate?.longitudine);
+
+    if (!datiAnnuncio?.topic || !Number.isFinite(latitudine) || !Number.isFinite(longitudine)) {
+        return;
+    }
+
+    const latDelta = MIN_DISTANCE_SAME_TOPIC_METERS / 111320;
+    const cosLat = Math.cos(toRadians(latitudine));
+    const lngDelta = MIN_DISTANCE_SAME_TOPIC_METERS / (111320 * Math.max(Math.abs(cosLat), 0.000001));
+
+    const annunciVicini = await Annuncio.find({
+        stato: "Attivo",
+        topic: datiAnnuncio.topic,
+        "coordinate.latitudine": {
+            $gte: latitudine - latDelta,
+            $lte: latitudine + latDelta,
+        },
+        "coordinate.longitudine": {
+            $gte: longitudine - lngDelta,
+            $lte: longitudine + lngDelta,
+        },
+    })
+        .select("idAnnuncio coordinate")
+        .lean();
+
+    const duplicatoVicino = annunciVicini.find((annuncio) =>
+        calcolaDistanzaMetri(
+            { latitudine, longitudine },
+            annuncio.coordinate,
+        ) <= MIN_DISTANCE_SAME_TOPIC_METERS
+    );
+
+    if (duplicatoVicino) {
+        throw new Error(`Esiste gia' una segnalazione "${datiAnnuncio.topic}" entro ${MIN_DISTANCE_SAME_TOPIC_METERS} metri.`);
+    }
+}
+
+function toRadians(value) {
+    return Number(value) * Math.PI / 180;
+}
+
+function calcolaDistanzaMetri(a, b) {
+    const lat1 = Number(a?.latitudine);
+    const lon1 = Number(a?.longitudine);
+    const lat2 = Number(b?.latitudine);
+    const lon2 = Number(b?.longitudine);
+
+    if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    const earthRadiusMeters = 6371000;
+    const deltaLat = toRadians(lat2 - lat1);
+    const deltaLon = toRadians(lon2 - lon1);
+    const haversine =
+        Math.sin(deltaLat / 2) ** 2 +
+        Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(deltaLon / 2) ** 2;
+
+    return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
 async function generaProssimoIdAnnuncio() {
@@ -68,7 +136,7 @@ exports.listaAnnunciAttivi = async function () {
         "coordinate.longitudine": { $type: "number" }
     })
         .sort({ dataOraPubblicazione: -1 })
-        .select("idAnnuncio idUser descrizione topic gravita posizione coordinate dataOraPubblicazione")
+        .select("idAnnuncio idUser nomeAutore descrizione topic gravita posizione coordinate dataOraPubblicazione")
         .lean();
 
     return arricchisciAutoriAnnunci(annunci);
@@ -128,9 +196,32 @@ async function arricchisciAutoriAnnunci(annunci) {
         }
     });
 
+    function isNomeAutorePlaceholder(nomeAutore) {
+        return !nomeAutore || nomeAutore === "Utente eliminato";
+    }
+
+    const annunciDaAggiornare = annunci
+        .filter((annuncio) =>
+            autoriByCodiceFiscale.has(annuncio.idUser) &&
+            (
+                isNomeAutorePlaceholder(annuncio.nomeAutore) ||
+                annuncio.nomeAutore !== autoriByCodiceFiscale.get(annuncio.idUser)
+            )
+        )
+        .map((annuncio) => ({
+            updateOne: {
+                filter: { _id: annuncio._id },
+                update: { $set: { nomeAutore: autoriByCodiceFiscale.get(annuncio.idUser) } },
+            },
+        }));
+
+    if (annunciDaAggiornare.length > 0) {
+        await Annuncio.bulkWrite(annunciDaAggiornare, { ordered: false });
+    }
+
     return annunci.map((annuncio) => ({
         ...annuncio,
-        nomeAutore: autoriByCodiceFiscale.get(annuncio.idUser) || annuncio.idUser,
+        nomeAutore: autoriByCodiceFiscale.get(annuncio.idUser) || annuncio.nomeAutore || "Utente eliminato",
     }));
 }
 

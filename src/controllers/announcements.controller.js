@@ -2,6 +2,17 @@
 
 const annuncioService = require('../services/announcements.service');
 
+function creaNomeAutoreSnapshot(utente) {
+    const profilo = utente?.profilo || {};
+
+    return (
+        profilo.nomeUtentePubblico ||
+        [profilo.nome, profilo.cognome].filter(Boolean).join(" ") ||
+        profilo.denominazione ||
+        "Utente RoadEye"
+    );
+}
+
 exports.crea = async (req, res) => {
     try {
 
@@ -19,6 +30,7 @@ exports.crea = async (req, res) => {
         // crea una singola variabile oggetto
         const datiNuovoAnnuncio = {
             idUser: req.user.codiceFiscale,
+            nomeAutore: creaNomeAutoreSnapshot(req.user),
             descrizione,
             topic,
             gravita,
