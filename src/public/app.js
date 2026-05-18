@@ -112,6 +112,7 @@
   let userLocationMarkerRecenterBound = false;
   let automaticLocationRequestDone = false;
   let deviceLocationPermissionDenied = false;
+  let lastUserLocationMarkerTapAt = 0;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
@@ -415,11 +416,27 @@
     }
 
     userLocationMarkerRecenterBound = true;
+    const handleTap = (event) => {
+      const now = Date.now();
+      const isDoubleTap = now - lastUserLocationMarkerTapAt <= 420;
+      lastUserLocationMarkerTapAt = now;
+
+      if (!isDoubleTap) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      recenterOnCurrentDeviceLocation();
+    };
+
     markerContent?.addEventListener("dblclick", (event) => {
       event.preventDefault();
       event.stopPropagation();
       recenterOnCurrentDeviceLocation();
     });
+    markerContent?.addEventListener("click", handleTap);
+    markerContent?.addEventListener("touchend", handleTap, { passive: false });
 
     if (typeof markerInstance?.addListener === "function") {
       markerInstance.addListener("dblclick", recenterOnCurrentDeviceLocation);
