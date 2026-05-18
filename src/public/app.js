@@ -111,6 +111,7 @@
   let automaticLocationRequestInProgress = false;
   let userLocationMarkerRecenterBound = false;
   let automaticLocationRequestDone = false;
+  let deviceLocationPermissionDenied = false;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
@@ -478,6 +479,10 @@
           lng: position.coords.longitude,
         }),
         (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            deviceLocationPermissionDenied = true;
+          }
+
           const message =
             error.code === error.PERMISSION_DENIED
               ? "Permesso posizione negato."
@@ -501,6 +506,10 @@
         timeout: 2500,
       }).catch((error) => {
         pendingDeviceLocationRequest = null;
+        if (deviceLocationPermissionDenied) {
+          return null;
+        }
+
         throw error;
       });
     }
@@ -527,6 +536,10 @@
         maximumAge: 15000,
         timeout: 8000,
       });
+    }
+
+    if (!deviceLocation) {
+      return null;
     }
 
     setUserLocationMarker(deviceLocation);
@@ -572,6 +585,11 @@
       return;
     }
 
+    if (deviceLocationPermissionDenied) {
+      setStatus("Autorizza la posizione su questo dispositivo per mostrarti sulla mappa.", "error");
+      return;
+    }
+
     if (!map?.innerMap) {
       primeCurrentDeviceLocation().catch(() => {});
       return;
@@ -584,10 +602,14 @@
     automaticLocationRequestInProgress = true;
 
     try {
-      await useCurrentDeviceLocation({ moveMap: true, zoom: 17, keepCentered: true });
-      automaticLocationRequestDone = true;
+      const location = await useCurrentDeviceLocation({ moveMap: true, zoom: 17, keepCentered: true });
+      automaticLocationRequestDone = Boolean(location);
     } catch (error) {
-      setStatus(error.message, "error");
+      if (deviceLocationPermissionDenied) {
+        setStatus("Autorizza la posizione su questo dispositivo per mostrarti sulla mappa.", "error");
+      } else {
+        setStatus(error.message, "error");
+      }
     } finally {
       automaticLocationRequestInProgress = false;
     }
