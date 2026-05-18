@@ -64,7 +64,15 @@ app.get("/v1", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "v1", "index.html"));
 });
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: true,
+  lastModified: true,
+  setHeaders(res, filePath) {
+    if (/\.(html|js|css)$/.test(filePath)) {
+      res.setHeader("Cache-Control", "no-cache");
+    }
+  },
+}));
 
 // Apply rate limiting alla API
 app.use("/api", apiLimiter);

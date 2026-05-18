@@ -4,16 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>RoadEye</title>
-    <link rel="stylesheet" href="/styles.css?v=0.1.11">
+    <link rel="stylesheet" href="/styles.css">
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/@googlemaps/extended-component-library/0.6.11/index.min.js"></script>
-    <script defer src="/app.js?v=0.1.11"></script>
+    <script defer src="/js/utils.js"></script>
+    <script defer src="/js/api.js"></script>
+    <script defer src="/js/forms.js"></script>
+    <script defer src="/js/topics.js"></script>
+    <script defer src="/js/ui.js"></script>
+    <script defer src="/app.js"></script>
   </head>
   <body>
     <div class="phone-app">
       <header class="app-header">
         <button class="icon-button" id="menu-toggle" type="button" aria-label="Apri menu">☰</button>
         <div class="brand-lockup">
-          <img class="brand-logo" src="/assets/roadeye-logo.png?v=0.1.8" alt="RoadEye">
+          <img class="brand-logo" src="/assets/roadeye-logo.png" alt="RoadEye">
         </div>
         <p class="section-status" id="header-section-title">Home</p>
         <button class="auth-action-button" id="header-auth-button" type="button">Accedi</button>

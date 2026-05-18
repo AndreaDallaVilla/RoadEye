@@ -2,31 +2,45 @@
   const TOKEN_KEY = "roadeye.token";
   const USER_KEY = "roadeye.user";
   const SEVERITY_TOPICS = ["Incidente stradale", "Pericolo bordo strada"]; // topic che hanno bisogno di avere la gravità
-  const TOPIC_MARKER_COLORS = { // tutti i topic con i relativi per la gestione della parte grafica
-    "Incidente stradale": "#d93025",
-    "Cantiere stradale": "#fbbc04",
-    Evento: "#7e3ff2",
-    "Ferimento animali": "#188038",
-    "Pericolo bordo strada": "#141414",
-    Autovelox: "#1a9bd7",
-  };
-  const TOPIC_ICON_COLORS = {
-    "Cantiere stradale": "#141414",
-    "Pericolo bordo strada": "#ffffff",
-  };
-  const TOPIC_MARKER_ICONS = {
-    Autovelox: "/assets/topic-autovelox.png",
-    "Cantiere stradale": "/assets/topic-cantiere.png",
-    "Incidente stradale": "/assets/topic-incidente.png",
-    "Ferimento animali": "/assets/topic-animali.png",
-    "Pericolo bordo strada": "/assets/topic-pericolo.png",
-    Evento: "/assets/topic-evento.png",
-  };
   const OTP_RESEND_COOLDOWN_SECONDS = 60;
   const API_BASE_URL = "/api/v1";
   const AREA_CLUSTER_MAX_ZOOM = 8;
   const ANNOUNCEMENT_MARKERS_MIN_ZOOM = 12;
   const MIN_DISTANCE_SAME_TOPIC_METERS = 25;
+  const {
+    calculateDistanceMeters,
+    formatCoordinates,
+    getPlainLocation,
+    getPublicAuthorName,
+  } = window.RoadEyeUtils;
+  const {
+    getStoredUser,
+    getToken,
+    requestJson,
+    setStoredUser,
+    setToken,
+  } = window.RoadEyeApi.createApiClient({
+    apiBaseUrl: API_BASE_URL,
+    tokenKey: TOKEN_KEY,
+    userKey: USER_KEY,
+  });
+  const {
+    formToObject,
+    initPasswordStrengthIndicator,
+    initPasswordToggles,
+    updatePasswordStrength,
+    validatePhoneFields,
+  } = window.RoadEyeForms;
+  const {
+    createAnnouncementMarkerContent,
+    getTopicColor,
+    updateCategoryTopicStyles,
+  } = window.RoadEyeTopics;
+  const {
+    createToastController,
+    setFormMessage,
+    setStatusMessage,
+  } = window.RoadEyeUi;
   const TRENTINO_CLUSTER_AREAS = [
     { label: "Trento e Valle dell'Adige", latMin: 45.98, latMax: 46.2, lngMin: 11.0, lngMax: 11.22 },
     { label: "Rovereto e Vallagarina", latMin: 45.68, latMax: 45.98, lngMin: 10.88, lngMax: 11.18 },
@@ -91,7 +105,6 @@
   let currentReportStep = "topic";
   let publicEntities = [];
   let pendingReportForm = null;
-  let appToastTimer = null;
   let pendingRegistrationPayload = null;
   const otpCooldownTimers = new Map();
   let announcementMarkers = [];
@@ -114,125 +127,14 @@
   let deviceLocationPermissionDenied = false;
   let lastUserLocationMarkerTapAt = 0;
   const severityValues = ["Bassa", "Media", "Alta", "Altissima"];
+  const toastController = createToastController(appToast);
 
   function setStatus(message, state) { // gestisce i messaggi di errore o successo per l'app
-    const shouldShow = state === "error" && message;
-    status.textContent = shouldShow ? message : "";
-    status.hidden = !shouldShow;
-    status.classList.remove("ready", "error");
-
-    if (shouldShow) {
-      status.classList.add(state);
-    }
+    setStatusMessage(status, message, state);
   }
 
   function setAuthMessage(message, state) { // gestisce i messaggi di errore o successo per l'accesso utente
-    authMessage.textContent = message || "";
-    authMessage.classList.remove("ok", "error");
-
-    if (state) {
-      authMessage.classList.add(state);
-    }
-  }
-
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY);
-  }
-
-  function setToken(token) {
-    if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      localStorage.removeItem(TOKEN_KEY);
-    }
-  }
-
-  function getStoredUser() {
-    try {
-      return JSON.parse(localStorage.getItem(USER_KEY));
-    } catch (_error) {
-      localStorage.removeItem(USER_KEY);
-      return null;
-    }
-  }
-
-  function setStoredUser(user) {
-    if (user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-      return;
-    }
-
-    localStorage.removeItem(USER_KEY);
-  }
-
-  function formatCoordinates(location) {
-    const normalizedLocation = getPlainLocation(location);
-
-    if (!normalizedLocation) {
-      return "";
-    }
-
-    return `${normalizedLocation.lat.toFixed(5)}, ${normalizedLocation.lng.toFixed(5)}`;
-  }
-
-  function isCodiceFiscale(value) {
-    return /^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/i.test(String(value || "").trim());
-  }
-
-  function getPublicAuthorName(announcement) {
-    const authorName = String(announcement?.nomeAutore || "").trim();
-
-    if (!authorName || isCodiceFiscale(authorName)) {
-      return "Utente eliminato";
-    }
-
-    return authorName;
-  }
-
-  function calculateDistanceMeters(firstLocation, secondLocation) {
-    const first = getPlainLocation(firstLocation);
-    const second = getPlainLocation(secondLocation);
-
-    if (!first || !second) {
-      return Number.POSITIVE_INFINITY;
-    }
-
-    const earthRadiusMeters = 6371000;
-    const toRadians = (value) => Number(value) * Math.PI / 180;
-    const deltaLat = toRadians(second.lat - first.lat);
-    const deltaLng = toRadians(second.lng - first.lng);
-    const haversine =
-      Math.sin(deltaLat / 2) ** 2 +
-      Math.cos(toRadians(first.lat)) *
-      Math.cos(toRadians(second.lat)) *
-      Math.sin(deltaLng / 2) ** 2;
-
-    return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-  }
-
-  function getPlainLocation(location) { // gestisce le coordinate 
-    if (!location) {
-      return null;
-    }
-
-    const jsonLocation = typeof location.toJSON === "function" ? location.toJSON() : null;
-    const lat =
-      typeof location.lat === "function"
-        ? location.lat()
-        : location.lat ?? location.latitude ?? location.latitudine ?? jsonLocation?.lat ?? jsonLocation?.latitude;
-    const lng =
-      typeof location.lng === "function"
-        ? location.lng()
-        : location.lng ?? location.longitude ?? location.longitudine ?? jsonLocation?.lng ?? jsonLocation?.longitude;
-
-    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
-      return null;
-    }
-
-    return {
-      lat: Number(lat),
-      lng: Number(lng),
-    };
+    setFormMessage(authMessage, message, state);
   }
 
   function fitMapToViewport(viewport) {
@@ -1069,32 +971,7 @@
   }
 
   function showAppToast(message, duration = 2000) {
-    if (!appToast) {
-      return Promise.resolve();
-    }
-
-    if (appToastTimer) {
-      window.clearTimeout(appToastTimer);
-    }
-
-    appToast.replaceChildren();
-    const dialog = document.createElement("div");
-    const text = document.createElement("p");
-    dialog.className = "toast-dialog";
-    text.textContent = message;
-    dialog.append(text);
-    appToast.append(dialog);
-    appToast.hidden = false;
-    appToast.classList.add("visible");
-
-    return new Promise((resolve) => {
-      appToastTimer = window.setTimeout(() => {
-        appToast.classList.remove("visible");
-        appToast.hidden = true;
-        appToastTimer = null;
-        resolve();
-      }, duration);
-    });
+    return toastController.showAppToast(message, duration);
   }
 
   function moveMapPanel(target) {
@@ -1275,172 +1152,6 @@
     document.querySelector(`#${panelName}-form`).classList.add("active");
     document.querySelector(`#${panelName}-tab`)?.classList.add("active");
     headerSectionTitle.textContent = authTitles[panelName] || viewTitles.auth;
-  }
-
-  function initPasswordToggles() { // gestione della password
-    document.querySelectorAll(".password-toggle").forEach((button) => {
-      const field = button.closest(".password-field");
-      const input = field ? field.querySelector("input") : null;
-
-      if (!input) {
-        return;
-      }
-
-      button.addEventListener("click", () => {
-        const shouldShowPassword = input.type === "password";
-
-        input.type = shouldShowPassword ? "text" : "password";
-        button.setAttribute("aria-pressed", String(shouldShowPassword));
-        button.setAttribute("aria-label", shouldShowPassword ? "Nascondi password" : "Mostra password");
-        input.focus();
-      });
-    });
-  }
-
-  function getPasswordStrength(password) { // gestione della forza della password 
-    const checks = [
-      password.length >= 10,
-      /[0-9]/.test(password),
-      /[A-Z]/.test(password),
-      /[a-z]/.test(password),
-      /[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password),
-    ];
-    const score = checks.filter(Boolean).length;
-
-    if (!password) {
-      return {
-        isValid: false,
-        state: "",
-        label: "Inserisci una password",
-      };
-    }
-
-    if (score <= 2) {
-      return {
-        isValid: false,
-        state: "is-weak",
-        label: "Password debole",
-      };
-    }
-
-    if (score <= 4) {
-      return {
-        isValid: false,
-        state: score === 3 ? "is-fair" : "is-good",
-        label: score === 3 ? "Password media" : "Quasi forte",
-      };
-    }
-
-    return {
-      isValid: true,
-      state: "is-strong",
-      label: "Password forte",
-    };
-  }
-
-  function updatePasswordStrength(input, indicator) { // gestione della forza della password (etichetta)
-    const strength = getPasswordStrength(input.value);
-    const text = indicator.querySelector(".strength-text");
-
-    indicator.classList.remove("is-weak", "is-fair", "is-good", "is-strong");
-
-    if (strength.state) {
-      indicator.classList.add(strength.state);
-    }
-
-    text.textContent = strength.label;
-    return strength;
-  }
-
-  function initPasswordStrengthIndicator() { // gestione della forza della password 
-    document.querySelectorAll("[data-password-strength]").forEach((indicator) => {
-      const label = indicator.closest("label");
-      const passwordInput = label ? label.querySelector('input[name="password"]') : null;
-
-      if (!passwordInput) {
-        return;
-      }
-
-      updatePasswordStrength(passwordInput, indicator);
-      passwordInput.addEventListener("input", () => updatePasswordStrength(passwordInput, indicator));
-    });
-  }
-
-  function getVersionedApiUrl(url) {
-    return typeof url === "string" && url.startsWith("/api/")
-      ? `${API_BASE_URL}${url.slice(4)}`
-      : url;
-  }
-
-  async function requestJson(url, options) {
-    const response = await fetch(getVersionedApiUrl(url), {
-      headers: {
-        "Content-Type": "application/json",
-        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
-        ...(options?.headers || {}),
-      },
-      ...options,
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const error = new Error(payload.message || "Operazione non riuscita");
-      error.status = response.status;
-      throw error;
-    }
-
-    return payload;
-  }
-
-  function formToObject(form) {
-    const formData = new FormData(form);
-    const data = {};
-
-    formData.forEach((value, key) => {
-      if (typeof value === "string" && value.trim() !== "") {
-        data[key] = value.trim();
-      }
-    });
-
-    form.querySelectorAll("input[type='checkbox']").forEach((input) => {
-      data[input.name] = input.checked;
-    });
-
-    return data;
-  }
-
-  function validatePhoneFields(form) { // gestione dei campi inerenti al telefono
-    const countryInput = form.querySelector('select[name="nazioneTelefono"]');
-    const phoneInput = form.querySelector('input[name="numeroTelefono"]');
-
-    if (!countryInput || !phoneInput) {
-      return true;
-    }
-
-    const countryCode = countryInput.value;
-    const phoneValue = phoneInput.value.trim();
-
-    countryInput.setCustomValidity("");
-    phoneInput.setCustomValidity("");
-
-    if (!countryCode && !phoneValue) {
-      return true;
-    }
-
-    if (!countryCode) {
-      countryInput.setCustomValidity("Seleziona la nazione del prefisso.");
-      countryInput.reportValidity();
-      return false;
-    }
-
-    if (!/^\+?[\d\s().-]{4,20}$/.test(phoneValue)) {
-      phoneInput.setCustomValidity("Inserisci un numero di telefono valido.");
-      phoneInput.reportValidity();
-      return false;
-    }
-
-    return true;
   }
 
   async function loadPhoneCountries() { // gestione del paese di provenienza per la gestione del numero di telefono
@@ -2348,46 +2059,6 @@
     });
 
     return markerElement;
-  }
-
-  function getTopicColor(topic) {
-    return TOPIC_MARKER_COLORS[topic] || "#141414";
-  }
-
-  function getTopicIconColor(topic) {
-    return TOPIC_ICON_COLORS[topic] || "#ffffff";
-  }
-
-  function createAnnouncementMarkerContent(topic, options = {}) {
-    const element = document.createElement("span");
-    element.className = options.compact ? "announcement-topic-badge compact" : "map-announcement-marker";
-    element.style.setProperty("--marker-color", getTopicColor(topic));
-    element.style.setProperty("--marker-icon-color", getTopicIconColor(topic));
-    const iconSrc = TOPIC_MARKER_ICONS[topic];
-    if (iconSrc) {
-      const icon = document.createElement("img");
-      icon.src = iconSrc;
-      icon.alt = "";
-      icon.loading = "lazy";
-      element.append(icon);
-    } else {
-      element.textContent = topic?.charAt(0) || "";
-    }
-    element.setAttribute("aria-hidden", "true");
-    return element;
-  }
-
-  function updateCategoryTopicStyles() {
-    document.querySelectorAll("[data-category]").forEach((button) => {
-      const topic = button.dataset.category;
-      const iconSlot = button.querySelector(".topic-choice-icon");
-      button.style.setProperty("--topic-color", getTopicColor(topic));
-      if (!iconSlot) {
-        return;
-      }
-
-      iconSlot.replaceChildren(createAnnouncementMarkerContent(topic, { compact: true }));
-    });
   }
 
   async function loadActiveAnnouncements() {
